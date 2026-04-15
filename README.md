@@ -103,7 +103,7 @@ $ fglrun ai_rag_quotes.42m anthropic mydbsrc myuser mypswd
 ```
 
 ## TODO:
-- none
+- Detach text embedding model from LLM model.
 
 ## Bug fixes:
 - none

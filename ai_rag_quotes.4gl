@@ -27,11 +27,16 @@ TYPE t_context_item RECORD
        data STRING
      END RECORD
 
-CONSTANT c_rag_info_delimiter STRING = "```"
+CONSTANT c_quote_delim STRING = "```"
 
-DEFINE provider STRING
+PRIVATE CONSTANT c_ai_provider_gemini = "gemini"
+PRIVATE CONSTANT c_ai_provider_anthropic = "anthropic"
+PRIVATE CONSTANT c_ai_provider_mistral = "mistral"
+PRIVATE CONSTANT c_ai_provider_openai  = "openai"
 
 MAIN
+    DEFINE ai_provider STRING
+    DEFINE ai_model STRING
     DEFINE x, s INTEGER
     DEFINE dbsource, dbuser, dbpswd, dbserver STRING
     DEFINE quote_list DYNAMIC ARRAY OF t_famquote
@@ -39,11 +44,12 @@ MAIN
     DEFINE search_context STRING = "Famous quotes related to political concerns"
     DEFINE max_cosine_similarity FLOAT = 0.45
     DEFINE search_vector STRING
-    DEFINE assistant_message STRING
-    DEFINE system_message STRING = "You are a history professor.
- You can answer questions about quotes made by famous people or movie characters.
- Generate your answer using the relevant quotes provided in the assistant message.
- Always mention the famous quote and the author of the quote in your answer."
+    DEFINE context_data STRING
+    DEFINE system_message STRING = `You are a middle-school teacher.
+ You can answer questions about quotes made by real famous people or movie characters.
+ Generate your answer using the relevant quotes provided between <quotes> XML markers.
+ Always mention the famous quote and the author of the quote in your answer.
+ If the answer is not in the context, just respond "I don't know".`
     DEFINE context_items DYNAMIC ARRAY OF t_context_item
     DEFINE user_question STRING = "Who is known for a famous quote about racism?"
     DEFINE llm_response STRING
@@ -51,10 +57,11 @@ MAIN
     OPEN FORM f1 FROM "ai_rag_quotes"
     DISPLAY FORM f1
 
-    LET provider = NVL(arg_val(1),"anthropic")
-    LET dbsource = NVL(arg_val(2),"test1+driver='dbmpgs_9'")
-    LET dbuser =  NVL(arg_val(3),"pgsuser")
-    LET dbpswd =  NVL(arg_val(4),"fourjs")
+    LET ai_provider = NVL(arg_val(1),"anthropic")
+    LET ai_model = NVL(arg_val(2),"clause-opus-4-6")
+    LET dbsource = NVL(arg_val(3),"test1+driver='dbmpgs_9'")
+    LET dbuser =  NVL(arg_val(4),"pgsuser")
+    LET dbpswd =  NVL(arg_val(5),"fourjs")
 
     IF dbuser IS NULL THEN
         CONNECT TO dbsource USER dbuser USING dbpswd
@@ -63,15 +70,12 @@ MAIN
     END IF
     LET dbserver = fgl_db_driver_type()
 
-    -- Init all AI SDK modules: User can choose provider later on...
     CALL aim_anthropic.initialize()
     CALL aim_openai.initialize()
     CALL aim_gemini.initialize()
     CALL aim_mistral.initialize()
-    CALL aim_vectors.initialize()
 
-    -- Init embeddings SDK
-    CALL aim_mistral.initialize()
+    CALL aim_vectors.initialize()
 
     LET s = fill_quote_list(quote_list)
 
@@ -80,13 +84,13 @@ MAIN
         DISPLAY ARRAY quote_list TO sr_quote_list.*
         END DISPLAY
 
-        INPUT BY NAME dbserver, dbsource, provider, system_message,
+        INPUT BY NAME dbserver, dbsource, ai_provider, ai_model, system_message,
                       search_context, max_cosine_similarity, search_vector,
-                      assistant_message, user_question,
+                      context_data, user_question,
                       llm_response
             ATTRIBUTES(WITHOUT DEFAULTS)
 
-            ON CHANGE provider
+            ON CHANGE ai_provider
                UPDATE famquote SET emb = NULL
                LET s = fill_quote_list(quote_list)
                CALL quote_list_attr.clear()
@@ -100,26 +104,26 @@ MAIN
            CALL init_sql_table()
            CALL quote_list.clear()
            CALL quote_list_attr.clear()
-           LET assistant_message = NULL
+           LET context_data = NULL
            LET llm_response = NULL
 
         ON ACTION fill_quote_list
            LET s = fill_quote_list(quote_list)
            CALL quote_list_attr.clear()
-           LET assistant_message = NULL
+           LET context_data = NULL
            LET llm_response = NULL
 
         ON ACTION compute_vector_embeddings
-           CALL compute_vector_embeddings(provider)
+           CALL compute_vector_embeddings(ai_provider)
            LET s = fill_quote_list(quote_list)
            CALL quote_list_attr.clear()
-           LET assistant_message = NULL
+           LET context_data = NULL
            LET llm_response = NULL
 
         ON ACTION search_vector
-           LET assistant_message = NULL
+           LET context_data = NULL
            LET llm_response = NULL
-           LET search_vector = compute_search_vector(provider,search_context)
+           LET search_vector = compute_search_vector(ai_provider,search_context)
            IF search_vector IS NULL THEN
                CALL _mbox_ok("Could not compute search vector.")
            END IF
@@ -132,16 +136,17 @@ MAIN
            END IF
            LET x = find_matching_quotes(max_cosine_similarity,search_vector,context_items)
            IF x == 0 THEN
-               LET assistant_message = NULL
+               LET context_data = NULL
                CALL _mbox_ok("No matching quotes found in database!\nIncrease MAX cosine similarity.")
            ELSE
-               LET assistant_message = build_assistant_message(search_context,context_items)
+               LET context_data = build_context_data(search_context,context_items)
                CALL fill_quote_list_attrs(quote_list,context_items,quote_list_attr)
                CALL _mbox_ok(SFMT("Found %1 matching quotes in database!",x))
            END IF
 
         ON ACTION ask_llm
-           LET llm_response = send_question_to_llm(provider,system_message,assistant_message,user_question)
+           LET llm_response =
+               send_question_to_ai(ai_provider, system_message, context_data, user_question)
 
         ON ACTION close
            EXIT DIALOG
@@ -294,31 +299,32 @@ FUNCTION fill_quote_list_attrs(
 END FUNCTION
 
 FUNCTION _init_vector_embedding_request(
-    provider STRING,
+    ai_provider STRING,
+    --ai_emb_model STRING,
     te_client aim_vectors.t_client INOUT,
     te_request aim_vectors.t_text_embedding_request INOUT
 ) RETURNS ()
-    CASE provider
-    WHEN "anthropic" -- Must use VoyageAI for vector generation!
+    CASE ai_provider
+    WHEN c_ai_provider_anthropic -- Must use VoyageAI for vector generation!
         CALL te_client.set_defaults("voyageai","voyage-3-large")
         CALL te_request.set_defaults(te_client,NULL)
-    WHEN "openai"
-        CALL te_client.set_defaults("openai","text-embedding-3-small")
+    WHEN c_ai_provider_openai
+        CALL te_client.set_defaults(ai_provider,"text-embedding-3-small")
         CALL te_request.set_defaults(te_client,c_vector_dimension)
-    WHEN "mistral"
-        CALL te_client.set_defaults("mistral","mistral-embed")
+    WHEN c_ai_provider_mistral
+        CALL te_client.set_defaults(ai_provider,"mistral-embed")
         CALL te_request.set_defaults(te_client,NULL) -- dim is always 1024 with mistral
-    WHEN "gemini"
-        CALL te_client.set_defaults("gemini","gemini-embedding-001")
+    WHEN c_ai_provider_gemini
+        CALL te_client.set_defaults(ai_provider,"gemini-embedding-001")
         CALL te_request.set_defaults(te_client,c_vector_dimension)
     OTHERWISE
-        DISPLAY "Unexpected AI provider: ", provider
+        DISPLAY "Unexpected AI provider: ", ai_provider
         EXIT PROGRAM 1
     END CASE
 END FUNCTION
 
 FUNCTION compute_vector_embeddings(
-    provider STRING
+    ai_provider STRING
 ) RETURNS ()
 
     DEFINE s, x, tt INTEGER
@@ -330,7 +336,7 @@ FUNCTION compute_vector_embeddings(
     DEFINE te_request aim_vectors.t_text_embedding_request
     DEFINE te_response aim_vectors.t_text_embedding_response
 
-    CALL _init_vector_embedding_request(provider,te_client,te_request)
+    CALL _init_vector_embedding_request(ai_provider,te_client,te_request)
 
     SELECT COUNT(*) INTO tt FROM famquote
 
@@ -339,13 +345,13 @@ FUNCTION compute_vector_embeddings(
     PREPARE stmt2 FROM sqlcmd
     DECLARE c_compute_vectors CURSOR FROM "SELECT pkey, author, language, quote FROM famquote WHERE emb IS NULL ORDER BY pkey"
     FOREACH c_compute_vectors INTO rec.*
-        LET source = rec.author, " said: ", c_rag_info_delimiter, rec.quote, c_rag_info_delimiter
+        LET source = rec.author, " said: ", c_quote_delim, rec.quote, c_quote_delim
         LET x = x + 1
         MESSAGE SFMT("Computing vector: %1/%2", x, tt); CALL ui.Interface.refresh()
         CALL te_request.set_source(source)
         LET s = te_client.send_text_embedding_request(te_request,te_response)
         IF s < 0 THEN
-            CALL _mbox_ok(SFMT("ERROR: Could not get text embedding from %1.\n Probably HTTP 429? Try again.",provider))
+            CALL _mbox_ok(SFMT("ERROR: Could not get text embedding from %1.\n Probably HTTP 429? Try again.",ai_provider))
             EXIT FOREACH
         END IF
         LET vector = te_response.get_vector()
@@ -358,7 +364,7 @@ FUNCTION compute_vector_embeddings(
 END FUNCTION
 
 FUNCTION compute_search_vector(
-    provider STRING,
+    ai_provider STRING,
     source STRING
 ) RETURNS STRING
 
@@ -368,14 +374,14 @@ FUNCTION compute_search_vector(
     DEFINE te_request aim_vectors.t_text_embedding_request
     DEFINE te_response aim_vectors.t_text_embedding_response
 
-    CALL _init_vector_embedding_request(provider,te_client,te_request)
+    CALL _init_vector_embedding_request(ai_provider,te_client,te_request)
 
     MESSAGE "Waiting for answer..."; CALL ui.Interface.refresh()
 
     CALL te_request.set_source(source)
     LET s = te_client.send_text_embedding_request(te_request,te_response)
     IF s < 0 THEN
-        CALL _mbox_ok(SFMT("ERROR: Could not get text embedding from %1.\n",provider))
+        CALL _mbox_ok(SFMT("ERROR: Could not get text embedding from %1.\n",ai_provider))
         LET vector = NULL
     ELSE
         LET vector = te_response.get_vector()
@@ -418,7 +424,7 @@ display rec.pkey, "  cosine similarity: ", (cosim using "--&.&&&&&&&"), "  max: 
         LET x = x+1
         LET context_items[x].pkey = rec.pkey
         LET context_items[x].data = rec.author, " said: ",
-                   c_rag_info_delimiter, rec.quote, c_rag_info_delimiter
+                   c_quote_delim, rec.quote, c_quote_delim
     END FOREACH
 
     RETURN context_items.getLength()
@@ -458,7 +464,7 @@ FUNCTION _vector_sql_fetch_expr(expr STRING, dimension INTEGER) RETURNS STRING
     END CASE
 END FUNCTION
 
-FUNCTION build_assistant_message(
+FUNCTION build_context_data(
     search_context STRING,
     context_items DYNAMIC ARRAY OF t_context_item
 ) RETURNS STRING
@@ -476,80 +482,98 @@ FUNCTION build_assistant_message(
 
 END FUNCTION
 
-FUNCTION send_question_to_llm(
-    provider STRING,
+FUNCTION send_question_to_ai(
+    ai_provider STRING,
     system_message STRING,
-    assistant_message STRING,
+    context_data STRING,
     question STRING
 ) RETURNS STRING
 
     DEFINE result STRING
-let provider =null
-let system_message =null
-let assistant_message =null
-let question =null
-{
+
     DEFINE s, x INTEGER
     --
-    DEFINE oai_client OpenAI.t_client
-    DEFINE oai_chat_request OpenAI.t_chat_request
-    DEFINE oai_chat_response OpenAI.t_chat_response
+    DEFINE ant_client aim_anthropic.t_client
+    DEFINE ant_request aim_anthropic.t_message_request
+    DEFINE ant_response aim_anthropic.t_response
     --
-    DEFINE gem_client Gemini.t_client
-    DEFINE gem_chat_request Gemini.t_chat_request
-    DEFINE gem_chat_response Gemini.t_chat_response
+    DEFINE oai_client aim_openai.t_client
+    DEFINE oai_request aim_openai.t_response_request
+    DEFINE oai_response aim_openai.t_response
+    --
+    DEFINE gem_client aim_gemini.t_client
+    DEFINE gem_request aim_gemini.t_text_request
+    DEFINE gem_response aim_gemini.t_text_response
+    --
+    DEFINE mis_client aim_mistral.t_client
+    DEFINE mis_request aim_mistral.t_chat_request
+    DEFINE mis_response aim_mistral.t_chat_response
 
     MESSAGE "Waiting for answer..."; CALL ui.Interface.refresh()
 
-    CASE provider
-    WHEN "openai"
-        CALL oai_client.set_defaults_openai("gpt-4o")
-        CALL oai_chat_request.set_defaults(oai_client)
-        LET oai_chat_request.temperature = 1.2
-    WHEN "mistral"
-        CALL oai_client.set_defaults_mistral("mistral-large-latest")
-        CALL oai_chat_request.set_defaults(oai_client)
-        LET oai_chat_request.temperature = 1.2
-    WHEN "anthropic"
-        CALL oai_client.set_defaults_anthropic("claude-3-7-sonnet-20250219")
-        CALL oai_chat_request.set_defaults(oai_client)
-        LET oai_chat_request.temperature = 0.8
-    WHEN "gemini"
-        CALL gem_client.set_defaults_gemini(Gemini.text_generation_models[1])
-        CALL gem_chat_request.set_defaults(gem_client)
-        LET gem_chat_request.generationConfig.temperature = 1.2
+    CASE ai_provider
+    WHEN c_ai_provider_openai
+        CALL oai_client.set_defaults("gpt-4o")
+        CALL oai_request.set_defaults(oai_client)
+        LET oai_request.temperature = 1.2
+    WHEN c_ai_provider_mistral
+        CALL mis_client.set_defaults("mistral-large-latest")
+        CALL mis_request.set_defaults(mis_client)
+        LET mis_request.temperature = 1.2
+    WHEN c_ai_provider_anthropic
+        CALL ant_client.set_defaults("claude-haiku-4-5")
+        CALL ant_request.set_defaults(ant_client)
+        LET ant_request.temperature = 0.8
+    WHEN c_ai_provider_gemini
+        CALL gem_client.set_defaults("gemini-3-flash-preview")
+        CALL gem_request.set_defaults(gem_client)
+        LET gem_request.generationConfig.temperature = 1.2
+    OTHERWISE
+        DISPLAY "Invalid AI provider"
+        EXIT PROGRAM 1
     END CASE
 
     IF length(system_message)>0 THEN
-        CASE provider
-        WHEN "gemini" CALL gem_chat_request.set_system_instruction(system_message)
-        OTHERWISE     LET x = oai_chat_request.append_system_message(system_message)
+        CASE ai_provider
+        WHEN c_ai_provider_openai     CALL oai_request.set_instructions(system_message)
+        WHEN c_ai_provider_mistral    CALL mis_request.set_system_message(system_message)
+        WHEN c_ai_provider_anthropic  CALL ant_request.set_system_message(system_message)
+        WHEN c_ai_provider_gemini     CALL gem_request.set_system_instruction(system_message)
         END CASE
     END IF
-    IF length(assistant_message)>0 THEN
-        CASE provider
-        WHEN "gemini" LET x = gem_chat_request.append_model_content(assistant_message)
-        OTHERWISE     LET x = oai_chat_request.append_assistant_message(assistant_message)
+    IF length(context_data)>0 THEN
+        CASE ai_provider
+        WHEN c_ai_provider_openai     LET x = oai_request.append_developer_input(context_data)
+        WHEN c_ai_provider_mistral    LET x = mis_request.append_user_message(context_data)
+        WHEN c_ai_provider_anthropic  LET x = ant_request.append_user_message(context_data)
+        WHEN c_ai_provider_gemini     LET x = gem_request.append_user_content(context_data)
         END CASE
     END IF
-    CASE provider
-    WHEN "gemini"
-        LET x = gem_chat_request.append_user_content(c_rag_info_delimiter||question||c_rag_info_delimiter)
-        LET s = gem_client.send_chat_completion_request(gem_chat_request,gem_chat_response)
-        LET result = gem_chat_response.get_content(1)
-    OTHERWISE
-        LET x = oai_chat_request.append_user_message(c_rag_info_delimiter||question||c_rag_info_delimiter)
-        LET s = oai_client.send_chat_completion_request(oai_chat_request,oai_chat_response)
-        LET result = oai_chat_response.get_content(1)
+    CASE ai_provider
+    WHEN c_ai_provider_openai
+        LET x = oai_request.append_user_input(c_quote_delim||question||c_quote_delim)
+        LET s = oai_client.create_response(oai_request,oai_response)
+        LET result = oai_response.get_output_message_content_text(1,1)
+    WHEN c_ai_provider_mistral
+        LET x = mis_request.append_user_message(c_quote_delim||question||c_quote_delim)
+        LET s = mis_client.create_chat_completion(mis_request,mis_response)
+        LET result = mis_response.get_content_text(1)
+    WHEN c_ai_provider_anthropic
+        LET x = ant_request.append_user_message(c_quote_delim||question||c_quote_delim)
+        LET s = ant_client.create_message(ant_request,ant_response)
+        LET result = ant_response.get_content_text(1)
+    WHEN c_ai_provider_gemini
+        LET x = gem_request.append_user_content(c_quote_delim||question||c_quote_delim)
+        LET s = gem_client.create_response(gem_request,gem_response)
+        LET result = gem_response.get_content_text(1)
     END CASE
     IF s<0 THEN
-        DISPLAY SFMT("ERROR: Failed to ask question to %1",provider)
+        DISPLAY SFMT("ERROR: Failed to ask question to %1",ai_provider)
         EXIT PROGRAM 1
     END IF
 
     MESSAGE ""
 
-}
     RETURN result
 
 END FUNCTION

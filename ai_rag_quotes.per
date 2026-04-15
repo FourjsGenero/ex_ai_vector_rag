@@ -3,8 +3,8 @@ HBOX (SPLITTER)
 VBOX
 GRID
 {
-SQL Database server: [dbs                    ][src                         ]
-AI LLM provider:     [pro                                                  ]
+SQL DB server/source:[dbs                    ][src                         ]
+AI provider/model:   [pro                    ][mod                         ]
 [b1                    ][b2                     ][b3                       ]
 }
 END
@@ -80,13 +80,14 @@ COMBOBOX dbs = FORMONLY.dbserver, NOT NULL, NOENTRY,
     ("mdb","MariaDB")
   );
 EDIT src = FORMONLY.dbsource, NOENTRY, STRETCH=X;
-COMBOBOX pro = FORMONLY.provider, NOT NULL,
+COMBOBOX pro = FORMONLY.ai_provider, NOT NULL,
   ITEMS = (
     ("openai","OpenAI/GPT"),
     ("mistral","Mistral/Large"),
     ("gemini","Google/Gemini"),
     ("anthropic","Anthropic/Claude")
 );
+EDIT mod = FORMONLY.ai_model, NOENTRY, STRETCH=X;
 
 BUTTON b1: init_sql_table,
    TEXT="1. Init SQL table";
@@ -113,7 +114,7 @@ BUTTON fma: find_match, TEXT="5. Find matching rows in local DB", IMAGE="fa-data
   COMMENT="Find similar matching quotes in local SQL database";
 TEXTEDIT qrv = FORMONLY.search_vector, COLOR=RED,
   STRETCH=Y;
-TEXTEDIT amg = FORMONLY.assistant_message,
+TEXTEDIT amg = FORMONLY.context_data,
   STRETCH=Y;
 
 TEXTEDIT upr = FORMONLY.user_question,
