@@ -95,8 +95,9 @@ make clean all
 ### Starting the demo
 
 After compilation, run the main program to start the demo:
-```
+```bash
 $ export ANTHROPIC_API_KEY="sk-ant-..."
+$ export VOYAGE_API_KEY="pa-b..."
 
 $ fglrun ai_rag_quotes.42m anthropic mydbsrc myuser mypswd
 ```
