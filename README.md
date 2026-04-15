@@ -107,6 +107,7 @@ $ fglrun ai_rag_quotes.42m "anthropic" "clause-opus-4-6" "mydbsrc" myuser mypswd
 ```
 
 ## TODO:
+- Save current settings (provider, model) to env file.
 - Detach text embedding model from LLM model.
 
 ## Bug fixes:

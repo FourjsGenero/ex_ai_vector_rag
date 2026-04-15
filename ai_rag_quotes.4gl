@@ -1,3 +1,5 @@
+IMPORT util
+
 IMPORT FGL aim_anthropic
 IMPORT FGL aim_openai
 IMPORT FGL aim_gemini
@@ -7,19 +9,19 @@ IMPORT FGL aim_vectors
 --CONSTANT c_vector_dimension INTEGER = 512
 CONSTANT c_vector_dimension INTEGER = 1024
 
-TYPE t_famquote RECORD
+TYPE t_item RECORD
        pkey INT,
-       author STRING,
-       language STRING,
-       quote STRING,
+       short_name STRING,
+       category STRING,
+       description STRING,
        emb TEXT
      END RECORD
 
-TYPE t_famquote_attr RECORD
-       pkey STRING,
-       author STRING,
-       language STRING,
-       quote STRING,
+TYPE t_item_attr RECORD
+       pkey INT,
+       short_name STRING,
+       category STRING,
+       description STRING,
        emb STRING
      END RECORD
 
@@ -27,8 +29,6 @@ TYPE t_context_item RECORD
        pkey INT,
        data STRING
      END RECORD
-
-CONSTANT c_quote_delim STRING = "```"
 
 PRIVATE CONSTANT c_ai_provider_gemini = "gemini"
 PRIVATE CONSTANT c_ai_provider_anthropic = "anthropic"
@@ -40,19 +40,21 @@ MAIN
     DEFINE ai_model STRING
     DEFINE x, s INTEGER
     DEFINE dbsource, dbuser, dbpswd, dbserver STRING
-    DEFINE quote_list DYNAMIC ARRAY OF t_famquote
-    DEFINE quote_list_attr DYNAMIC ARRAY OF t_famquote_attr
-    DEFINE search_context STRING = "Quotes about political concerns"
+    DEFINE item_list DYNAMIC ARRAY OF t_item
+    DEFINE item_list_attr DYNAMIC ARRAY OF t_item_attr
+    DEFINE search_context STRING = "Sport articles"
     DEFINE max_cosine_similarity FLOAT = 0.45
     DEFINE search_vector STRING
     DEFINE context_data STRING
-    DEFINE system_message STRING = `You are a middle-school teacher.
- You can answer questions about quotes made by famous people or movie characters.
- Generate your answer using the relevant quotes provided between <quotes> XML markers.
- Always mention the famous quote and the author of the quote in your answer.
- If the answer is not in the context, just respond "I don't know".`
+    DEFINE system_message STRING = `You are a supermarket assistant.
+ You can answer customer questions about available items.
+ Focus on item descriptions provided between <items> XML markers.
+ Always mention the item short names in your answer.
+ If the provided items do not match the user question, just respond "I need more information to help you."`
     DEFINE context_items DYNAMIC ARRAY OF t_context_item
-    DEFINE user_question STRING = "Who is known for a famous quote about racism?"
+    DEFINE user_question STRING
+         = "I am a tennis player, what do you suggest me?"
+         #= "Can I find running shoes here?"
     DEFINE llm_response STRING
     DEFINE vector_dimension INTEGER
 
@@ -81,11 +83,11 @@ MAIN
 
     LET vector_dimension = c_vector_dimension
 
-    LET s = fill_quote_list(quote_list)
+    LET s = fill_item_list(item_list)
 
     DIALOG ATTRIBUTES(UNBUFFERED)
 
-        DISPLAY ARRAY quote_list TO sr_quote_list.*
+        DISPLAY ARRAY item_list TO sr_item_list.*
         END DISPLAY
 
         INPUT BY NAME dbserver, dbsource,
@@ -99,33 +101,33 @@ MAIN
             ON CHANGE ai_provider
                LET ai_model = _default_model(ai_provider)
                LET search_vector = NULL
-               UPDATE famquote SET emb = NULL
-               LET s = fill_quote_list(quote_list)
-               CALL quote_list_attr.clear()
+               UPDATE smitems SET emb = NULL
+               LET s = fill_item_list(item_list)
+               CALL item_list_attr.clear()
 
         END INPUT
 
         BEFORE DIALOG
-           CALL DIALOG.setArrayAttributes("sr_quote_list",quote_list_attr)
+           CALL DIALOG.setArrayAttributes("sr_item_list",item_list_attr)
 
         ON ACTION init_sql_table
            CALL init_sql_table()
-           CALL quote_list.clear()
-           CALL quote_list_attr.clear()
+           CALL item_list.clear()
+           CALL item_list_attr.clear()
            LET context_data = NULL
            LET llm_response = NULL
            MESSAGE "SQL Table initialized, ready to be filled with data"
 
-        ON ACTION fill_quote_list
-           LET s = fill_quote_list(quote_list)
-           CALL quote_list_attr.clear()
+        ON ACTION fill_item_list
+           LET s = fill_item_list(item_list)
+           CALL item_list_attr.clear()
            LET context_data = NULL
            LET llm_response = NULL
 
         ON ACTION compute_vector_embeddings
            CALL compute_vector_embeddings(ai_provider)
-           LET s = fill_quote_list(quote_list)
-           CALL quote_list_attr.clear()
+           LET s = fill_item_list(item_list)
+           CALL item_list_attr.clear()
            LET context_data = NULL
            LET llm_response = NULL
 
@@ -149,7 +151,7 @@ MAIN
                CALL _mbox_ok("No matching quotes found in database!\nIncrease MAX cosine similarity.")
            ELSE
                LET context_data = build_context_data(search_context,context_items)
-               CALL fill_quote_list_attrs(quote_list,context_items,quote_list_attr)
+               CALL fill_quote_list_attrs(item_list,context_items,item_list_attr)
                CALL _mbox_ok(SFMT("Found %1 matching quotes in database!",x))
            END IF
 
@@ -210,109 +212,50 @@ FUNCTION init_sql_table() RETURNS ()
 
     DEFINE x INTEGER
     DEFINE sqlcmd STRING
-    DEFINE arr DYNAMIC ARRAY OF t_famquote =
-    [
-     (
-      pkey: 101, author: "Martin Luther Kind Jr", language: "English",
-      quote: "I have a dream that my four little children will one day live in a nation where they will not be judged by the color of their skin but by the content of their character."
-     )
-     ,(
-      pkey: 102, author: "Winston Churchill", language: "English",
-      quote: "If you are going through hell, keep going."
-     )
-     ,(
-      pkey: 103, author: "Neil Amstrong", language: "English",
-      quote: "That’s one small step for man, one giant leap for mankind."
-     )
-     ,(
-      pkey: 104, author: "Abraham Lincoln", language: "English",
-      quote: "You can fool all of the people some of the time, and some of the people all of the time, but you can't fool all of the people all of the time."
-     )
-     ,(
-      pkey: 105, author: "Robert Frost", language: "English",
-      quote: "Two roads diverged in a wood, and I, I took the one less travelled by, and that has made all the difference."
-     )
-     ,(
-      pkey: 106, author: "John Kennedy", language: "English",
-      quote: "Ask not what your country can do for you; ask what you can do for your country."
-     )
-     ,(
-      pkey: 107, author: "Forrest Gump (movie character)", language: "English",
-      quote: "Life is like a box of chocolates. You never know what you’re gonna get."
-     )
-     ,(
-      pkey: 108, author: "Mahatma Gandhi", language: "English",
-      quote: "I cried because I had no shoes, then I met a man who had no feet."
-     )
-     ,(
-      pkey: 109, author: "Antoine de Saint-Exupéry", language: "French",
-      quote: "On ne voit bien qu'avec le cœur. L'essentiel est invisible pour les yeux."
-     )
-     ,(
-      pkey: 110, author: "Edmond Rostand", language: "French",
-      quote: "Il y a beaucoup de gens dont la facilité de parler ne vient que de l'impuissance de se taire."
-     )
-     ,(
-      pkey: 111, author: "Obi-Wan Kenobi (movie character)", language: "English",
-      quote: "May the Force be with you!"
-     )
-     ,(
-      pkey: 112, author: "Otis (movie character)", language: "French",
-      quote: "Vous savez, moi je ne crois pas qu'il y ait de bonne ou de mauvaise situation.
- Moi, si je devais résumer ma vie aujourd'hui avec vous, je dirais que c'est d'abord des rencontres."
-     )
-     ,(
-      pkey: 113, author: "Albert Einstein", language: "English",
-      quote: "A person who never made a mistake never tried anything new."
-     )
-     ,(
-      pkey: 114, author: "Benjamin Franklin", language: "English",
-      quote: "Tell me and I forget. Teach me and I remember. Involve me and I learn."
-     )
-     ,(
-      pkey: 115, author: "Socrate", language: "English",
-      quote: "The only true wisdom is in knowing you know nothing."
-     )
-     ,(
-      pkey: 116, author: "Oscar Wilde", language: "English",
-      quote: "There is only one thing in the world worse than being talked about, and that is not being talked about."
-     )
-    ]
+    DEFINE arr DYNAMIC ARRAY OF t_item
+    DEFINE data_file TEXT
+
+    LOCATE data_file IN FILE "items_1.json"
+    CALL util.JSON.parse(data_file,arr)
 
     WHENEVER ERROR CONTINUE
-    DROP TABLE famquote
+    DROP TABLE smitems
     WHENEVER ERROR STOP
-    LET sqlcmd = "CREATE TABLE famquote ("
-                  || " pkey INT, author VARCHAR(50), language VARCHAR(50), quote VARCHAR(2000)"
-                  || SFMT(", emb %1", _vector_sql_data_type(c_vector_dimension) )
+    LET sqlcmd = "CREATE TABLE smitems ("
+                  || " pkey INT,"
+                  || " short_name VARCHAR(50),"
+                  || " category VARCHAR(50),"
+                  || " description VARCHAR(500),"
+                  || SFMT(" emb %1", _vector_sql_data_type(c_vector_dimension) )
                   || ")"
 --display "SQL: ", sqlcmd
     EXECUTE IMMEDIATE sqlcmd
 
     -- First insert rows without embeddings
-    PREPARE stmt1 FROM "INSERT INTO famquote VALUES (?,?,?,?,NULL)"
+    PREPARE stmt1 FROM "INSERT INTO smitems VALUES (?,?,?,?,NULL)"
     FOR x = 1 TO arr.getLength()
-        EXECUTE stmt1 USING arr[x].pkey, arr[x].author, arr[x].language, arr[x].quote
+        EXECUTE stmt1 USING arr[x].pkey, arr[x].short_name,
+                            arr[x].category, arr[x].description
     END FOR
 
 END FUNCTION
 
 -- Table may not yet exist.
-FUNCTION fill_quote_list(
-    arr DYNAMIC ARRAY OF t_famquote
+FUNCTION fill_item_list(
+    arr DYNAMIC ARRAY OF t_item
 ) RETURNS INTEGER
     DEFINE x INTEGER
     DEFINE sqlcmd STRING
 
     TRY
-        SELECT COUNT(*) INTO x FROM famquote
+        SELECT COUNT(*) INTO x FROM smitems
     CATCH
         RETURN -1
     END TRY
 
-    LET sqlcmd = "SELECT pkey, author, language, quote"
+    LET sqlcmd = "SELECT pkey, short_name, category, description"
                   || SFMT(", %1", _vector_sql_fetch_expr("emb",c_vector_dimension))
-                  || " FROM famquote ORDER BY pkey"
+                  || " FROM smitems ORDER BY pkey"
 --display "SQL:", sqlcmd
     DECLARE c_fill_quote_list CURSOR FROM sqlcmd
     CALL arr.clear()
@@ -333,19 +276,18 @@ FUNCTION fill_quote_list(
 END FUNCTION
 
 FUNCTION fill_quote_list_attrs(
-    quote_list DYNAMIC ARRAY OF t_famquote,
+    item_list DYNAMIC ARRAY OF t_item,
     context_items DYNAMIC ARRAY OF t_context_item,
-    quote_list_attr DYNAMIC ARRAY OF t_famquote_attr
+    item_list_attr DYNAMIC ARRAY OF t_item_attr
 ) RETURNS ()
 
     DEFINE x, n INTEGER
 
-    CALL quote_list_attr.clear()
+    CALL item_list_attr.clear()
     FOR x = 1 TO context_items.getLength()
-        LET n = quote_list.search("pkey",context_items[x].pkey)
+        LET n = item_list.search("pkey",context_items[x].pkey)
         IF n>0 THEN
-            --LET quote_list_attr[n].quote = "green reverse"
-            LET quote_list_attr[n].quote = "green bold"
+            LET item_list_attr[n].description = "green bold"
         END IF
     END FOR
 
@@ -376,12 +318,18 @@ FUNCTION _init_vector_embedding_request(
     END CASE
 END FUNCTION
 
+FUNCTION _build_context_data(
+    rec t_item
+) RETURNS STRING
+    RETURN SFMT(`"%1" (%2): "%3"`, rec.short_name, rec.category, rec.description)
+END FUNCTION
+
 FUNCTION compute_vector_embeddings(
     ai_provider STRING
 ) RETURNS ()
 
     DEFINE s, x, tt INTEGER
-    DEFINE rec t_famquote
+    DEFINE rec t_item
     DEFINE source STRING
     DEFINE vector TEXT
     DEFINE sqlcmd STRING
@@ -393,14 +341,14 @@ FUNCTION compute_vector_embeddings(
 
     CALL _init_vector_embedding_request(ai_provider,te_client,te_request)
 
-    SELECT COUNT(*) INTO tt FROM famquote
+    SELECT COUNT(*) INTO tt FROM smitems
 
-    LET sqlcmd = SFMT("UPDATE famquote SET emb = %1 WHERE pkey = ?", _vector_sql_placeholder(c_vector_dimension))
+    LET sqlcmd = SFMT("UPDATE smitems SET emb = %1 WHERE pkey = ?", _vector_sql_placeholder(c_vector_dimension))
 --display "SQL:", sqlcmd
     PREPARE stmt2 FROM sqlcmd
-    DECLARE c_compute_vectors CURSOR FROM "SELECT pkey, author, language, quote FROM famquote ORDER BY pkey"
+    DECLARE c_compute_vectors CURSOR FROM "SELECT pkey, short_name, category, description FROM smitems ORDER BY pkey"
     FOREACH c_compute_vectors INTO rec.*
-        LET source = rec.author, " said: ", c_quote_delim, rec.quote, c_quote_delim
+        LET source = _build_context_data(rec)
         LET x = x + 1
         MESSAGE SFMT("Computing vector: %1/%2", x, tt); CALL ui.Interface.refresh()
         CALL te_request.set_source(source)
@@ -459,7 +407,7 @@ FUNCTION find_matching_quotes(
 
     DEFINE x INTEGER
     DEFINE sqlcmd STRING
-    DEFINE rec t_famquote
+    DEFINE rec t_item
     DEFINE cosim FLOAT
     DEFINE vector TEXT -- Required for SQL Server...
 
@@ -473,18 +421,17 @@ FUNCTION find_matching_quotes(
                           _vector_sql_placeholder(c_vector_dimension)
                        )
                      ),
-                     " pkey, author, language, quote FROM famquote ORDER BY cosim"
---display "SQL: ", sqlcmd
+                     " pkey, short_name FROM smitems ORDER BY cosim"
+display "SQL: ", sqlcmd
     DECLARE c_fetch_related CURSOR FROM sqlcmd
     LET x = 0
     CALL context_items.clear()
-    FOREACH c_fetch_related USING vector INTO cosim, rec.*
---display rec.pkey, "  cosine similarity: ", (cosim using "--&.&&&&&&&"), "  max: ", max_cosine_similarity
+    FOREACH c_fetch_related USING vector INTO cosim, rec.pkey, rec.short_name
+display rec.pkey, "  cosine similarity: ", (cosim using "--&.&&&&&&&"), "  max: ", max_cosine_similarity
         IF cosim > max_cosine_similarity THEN EXIT FOREACH END IF
         LET x = x+1
         LET context_items[x].pkey = rec.pkey
-        LET context_items[x].data = rec.author, " said: ",
-                   c_quote_delim, rec.quote, c_quote_delim
+        LET context_items[x].data = _build_context_data(rec)
     END FOREACH
 
     RETURN context_items.getLength()
@@ -538,11 +485,12 @@ FUNCTION build_context_data(
     DEFINE result_set base.StringBuffer
 
     LET result_set = base.StringBuffer.create()
-    CALL result_set.append("Relevant "|| search_context || ":")
+    CALL result_set.append(search_context || ":")
+    CALL result_set.append("<items>")
     FOR x = 1 TO context_items.getLength()
-        CALL result_set.append("\n")
-        CALL result_set.append(context_items[x].data)
+        CALL result_set.append("\n- "||context_items[x].data)
     END FOR
+    CALL result_set.append("\n</items>")
     RETURN result_set.toString()
 
 END FUNCTION
@@ -616,19 +564,19 @@ FUNCTION send_question_to_ai(
     END IF
     CASE ai_provider
     WHEN c_ai_provider_openai
-        LET x = oai_request.append_user_input(c_quote_delim||question||c_quote_delim)
+        LET x = oai_request.append_user_input(question)
         LET s = oai_client.create_response(oai_request,oai_response)
         LET result = oai_response.get_output_message_content_text(1,1)
     WHEN c_ai_provider_mistral
-        LET x = mis_request.append_user_message(c_quote_delim||question||c_quote_delim)
+        LET x = mis_request.append_user_message(question)
         LET s = mis_client.create_chat_completion(mis_request,mis_response)
         LET result = mis_response.get_content_text(1)
     WHEN c_ai_provider_anthropic
-        LET x = ant_request.append_user_message(c_quote_delim||question||c_quote_delim)
+        LET x = ant_request.append_user_message(question)
         LET s = ant_client.create_message(ant_request,ant_response)
         LET result = ant_response.get_content_text(1)
     WHEN c_ai_provider_gemini
-        LET x = gem_request.append_user_content(c_quote_delim||question||c_quote_delim)
+        LET x = gem_request.append_user_content(question)
         LET s = gem_client.create_response(gem_request,gem_response)
         LET result = gem_response.get_content_text(1)
     END CASE

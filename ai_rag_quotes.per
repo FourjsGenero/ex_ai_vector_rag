@@ -11,8 +11,8 @@ END
 SCROLLGRID (WANTFIXEDPAGESIZE=NO,STYLE="style1")
 {
 ---------------------------------------------------------------------------
-[qid  ] [qau                ][qlg           ]    Vector Embedding
-[qtx                                           ][qve                      ]
+[id   ][sn                      |ca            ] Vector Embedding
+[de                                            ][ve                       ]
 [                                              ][                         ]
 [                                              ][                         ]
 }
@@ -93,28 +93,28 @@ EDIT dim = FORMONLY.vector_dimension;
 
 BUTTON b1: init_sql_table,
    TEXT="1. Init SQL table";
-BUTTON b2: fill_quote_list,
-   TEXT="2. Load quotes list";
+BUTTON b2: fill_item_list,
+   TEXT="2. Load item list";
 BUTTON b3: compute_vector_embeddings,
    TEXT="3. Compute embeddings";
 
-LABEL qid = FORMONLY.ql_id;
-LABEL qau = FORMONLY.ql_author;
-LABEL qlg = FORMONLY.ql_language;
-TEXTEDIT qtx = FORMONLY.ql_quote;
-TEXTEDIT qve = FORMONLY.ql_vector, COLOR=RED;
+LABEL id = FORMONLY.il_id;
+LABEL sn = FORMONLY.il_short_name;
+LABEL ca = FORMONLY.il_category;
+TEXTEDIT de = FORMONLY.il_description;
+TEXTEDIT ve = FORMONLY.il_vector, COLOR=RED;
 
 TEXTEDIT smg = FORMONLY.system_message,
   STRETCH=Y, PLACEHOLDER="Enter the system message for the LLM here";
 
 TEXTEDIT qry = FORMONLY.search_context,
-  STRETCH=Y, PLACEHOLDER="Enter a search context for quotes here";
+  STRETCH=Y, PLACEHOLDER="Enter a search context for items here";
 EDIT csm = FORMONLY.max_cosine_similarity, NOT NULL,
   COMMENT="Max cosine distance must be adapted to the chosen embedding model";
 BUTTON csv: search_vector, TEXT="4. Compute context vector", IMAGE="fa-cogs",
   COMMENT="Generate the vector from the search context";
 BUTTON fma: find_match, TEXT="5. Find matching rows in local DB", IMAGE="fa-database",
-  COMMENT="Find similar matching quotes in local SQL database";
+  COMMENT="Find similar matching items description in local SQL database";
 TEXTEDIT qrv = FORMONLY.search_vector, COLOR=RED,
   STRETCH=Y;
 TEXTEDIT amg = FORMONLY.context_data,
@@ -130,5 +130,11 @@ TEXTEDIT res = FORMONLY.llm_response,
 END
 
 INSTRUCTIONS
-SCREEN RECORD sr_quote_list(FORMONLY.ql_id THRU FORMONLY.ql_vector);
+SCREEN RECORD sr_item_list(
+   FORMONLY.il_id,
+   FORMONLY.il_short_name,
+   FORMONLY.il_category,
+   FORMONLY.il_description,
+   FORMONLY.il_vector
+);
 END
