@@ -37,7 +37,7 @@ Search in local SQL database:
 [qrv                                                    ]
 [                                                       ]
 [                                                       ]
-Min cosine similarity:[csm   ]             [fma         ]
+Max cosine similarity:[csm   ]             [fma         ]
 Assistant message for LLM:
 [amg                                                    ]
 [                                                       ]
@@ -106,7 +106,7 @@ TEXTEDIT smg = FORMONLY.system_message,
 
 TEXTEDIT qry = FORMONLY.search_context,
   STRETCH=Y, PLACEHOLDER="Enter a search context for quotes here";
-EDIT csm = FORMONLY.min_cosine_similarity, NOT NULL;
+EDIT csm = FORMONLY.max_cosine_similarity, NOT NULL;
 BUTTON csv: search_vector, TEXT="Compute Vector", IMAGE="fa-cogs",
   COMMENT="Generate the vector from the search context";
 BUTTON fma: find_match, TEXT="Find in local DB", IMAGE="fa-database",

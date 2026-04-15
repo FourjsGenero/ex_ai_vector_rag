@@ -37,7 +37,7 @@ MAIN
     DEFINE quote_list DYNAMIC ARRAY OF t_famquote
     DEFINE quote_list_attr DYNAMIC ARRAY OF t_famquote_attr
     DEFINE search_context STRING = "Famous quotes related to political concerns"
-    DEFINE min_cosine_similarity FLOAT = 0.30
+    DEFINE max_cosine_similarity FLOAT = 0.45
     DEFINE search_vector STRING
     DEFINE assistant_message STRING
     DEFINE system_message STRING = "You are a history professor.
@@ -80,7 +80,7 @@ MAIN
         END DISPLAY
 
         INPUT BY NAME dbserver, dbsource, provider, system_message,
-                      search_context, min_cosine_similarity, search_vector,
+                      search_context, max_cosine_similarity, search_vector,
                       assistant_message, user_question,
                       llm_response
             ATTRIBUTES(WITHOUT DEFAULTS)
@@ -129,10 +129,10 @@ MAIN
                CALL _mbox_ok("First you need to compute the search vector from context sentence.")
                CONTINUE DIALOG
            END IF
-           LET x = find_matching_quotes(min_cosine_similarity,search_vector,context_items)
+           LET x = find_matching_quotes(max_cosine_similarity,search_vector,context_items)
            IF x == 0 THEN
                LET assistant_message = NULL
-               CALL _mbox_ok("No matching quotes found in database!\nChange min cosine similarity.")
+               CALL _mbox_ok("No matching quotes found in database!\nIncrease MAX cosine similarity.")
            ELSE
                LET assistant_message = build_assistant_message(search_context,context_items)
                CALL fill_quote_list_attrs(quote_list,context_items,quote_list_attr)
@@ -389,7 +389,7 @@ FUNCTION compute_search_vector(
 END FUNCTION
 
 FUNCTION find_matching_quotes(
-    min_cosine_similarity FLOAT,
+    max_cosine_similarity FLOAT,
     search_vector STRING,
     context_items DYNAMIC ARRAY OF t_context_item
 ) RETURNS INTEGER
@@ -399,16 +399,16 @@ FUNCTION find_matching_quotes(
     DEFINE rec t_famquote
     DEFINE cosim FLOAT
 
-    LET sqlcmd = SFMT("SELECT ((1 - (emb <=> %1))) cosim,", _vector_sql_placeholder(c_vector_dimension))
+    LET sqlcmd = SFMT("SELECT (emb <=> %1) cosim,", _vector_sql_placeholder(c_vector_dimension))
                   || " pkey, author, language, quote FROM famquote"
-                  || SFMT(" ORDER BY emb <=> %1", _vector_sql_placeholder(c_vector_dimension))
---display "SQL: ", sqlcmd
+                  || " ORDER BY cosim"
+display "SQL: ", sqlcmd
     DECLARE c_fetch_related CURSOR FROM sqlcmd
     LET x = 0
     CALL context_items.clear()
-    FOREACH c_fetch_related USING search_vector, search_vector INTO cosim, rec.*
-display rec.pkey, "  cosine similarity: ", (cosim using "--&.&&&&&&&"), "  min = ", min_cosine_similarity
-        IF cosim < min_cosine_similarity THEN EXIT FOREACH END IF
+    FOREACH c_fetch_related USING search_vector INTO cosim, rec.*
+display rec.pkey, "  cosine similarity: ", (cosim using "--&.&&&&&&&"), "  max: ", max_cosine_similarity
+        IF cosim > max_cosine_similarity THEN EXIT FOREACH END IF
         LET x = x+1
         LET context_items[x].pkey = rec.pkey
         LET context_items[x].data = rec.author, " said: ",
