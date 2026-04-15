@@ -302,13 +302,13 @@ FUNCTION _init_vector_embedding_request(
         CALL te_request.set_defaults(te_client,NULL)
     WHEN "openai"
         CALL te_client.set_defaults("openai","text-embedding-3-small")
-        CALL te_request.set_defaults(te_client,1024)
+        CALL te_request.set_defaults(te_client,c_vector_dimension)
     WHEN "mistral"
         CALL te_client.set_defaults("mistral","mistral-embed")
         CALL te_request.set_defaults(te_client,NULL) -- dim is always 1024 with mistral
     WHEN "gemini"
         CALL te_client.set_defaults("gemini","gemini-embedding-001")
-        CALL te_request.set_defaults(te_client,NULL)
+        CALL te_request.set_defaults(te_client,c_vector_dimension)
     OTHERWISE
         DISPLAY "Unexpected AI provider: ", provider
         EXIT PROGRAM 1
@@ -347,6 +347,7 @@ FUNCTION compute_vector_embeddings(
             EXIT FOREACH
         END IF
         LET vector = te_response.get_vector()
+--display "vector = ", vector
         EXECUTE stmt2 USING vector, rec.pkey
     END FOREACH
 
@@ -378,8 +379,8 @@ FUNCTION compute_search_vector(
         LET vector = te_response.get_vector()
     END IF
 
-display "Source text    = ", source
-display "Context vector = ", vector
+--display "Source text    = ", source
+--display "Context vector = ", vector
 
     MESSAGE ""
 
@@ -401,7 +402,7 @@ FUNCTION find_matching_quotes(
     LET sqlcmd = SFMT("SELECT ((1 - (emb <=> %1))) cosim,", _vector_sql_placeholder(c_vector_dimension))
                   || " pkey, author, language, quote FROM famquote"
                   || SFMT(" ORDER BY emb <=> %1", _vector_sql_placeholder(c_vector_dimension))
-display "SQL: ", sqlcmd
+--display "SQL: ", sqlcmd
     DECLARE c_fetch_related CURSOR FROM sqlcmd
     LET x = 0
     CALL context_items.clear()
