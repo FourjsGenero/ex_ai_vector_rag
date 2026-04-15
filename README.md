@@ -45,6 +45,7 @@ This source code is under [MIT license](./LICENSE)
   - PostgreSQL: Install pgvector/pgvectorscale extensions
   - Oracle DB: Must be Oracle 26ai with VECTOR type support
   - SQL Server: Must be SQL Server 2025 with VECTOR type support
+* SQL Database client corresponding to the server
 
 ## Setup
 

@@ -29,11 +29,11 @@ TYPE t_context_item RECORD
 
 CONSTANT c_rag_info_delimiter STRING = "```"
 
-DEFINE dbserver STRING
 DEFINE provider STRING
 
 MAIN
     DEFINE x, s INTEGER
+    DEFINE dbsource, dbuser, dbpswd, dbserver STRING
     DEFINE quote_list DYNAMIC ARRAY OF t_famquote
     DEFINE quote_list_attr DYNAMIC ARRAY OF t_famquote_attr
     DEFINE search_context STRING = "Famous quotes related to political concerns"
@@ -51,10 +51,17 @@ MAIN
     OPEN FORM f1 FROM "ai_rag_quotes"
     DISPLAY FORM f1
 
-    LET dbserver = NVL(arg_val(1),"pgs")
-    LET provider = NVL(arg_val(2),"openai")
+    LET provider = NVL(arg_val(1),"anthropic")
+    LET dbsource = NVL(arg_val(2),"test1+driver='dbmpgs_9'")
+    LET dbuser =  NVL(arg_val(3),"pgsuser")
+    LET dbpswd =  NVL(arg_val(4),"fourjs")
 
-    CALL sql_connect(dbserver)
+    IF dbuser IS NULL THEN
+        CONNECT TO dbsource USER dbuser USING dbpswd
+    ELSE
+        CONNECT TO dbsource USER dbuser USING dbpswd
+    END IF
+    LET dbserver = fgl_db_driver_type()
 
     -- Init all AI SDK modules: User can choose provider later on...
     CALL aim_anthropic.initialize()
@@ -65,27 +72,18 @@ MAIN
     -- Init embeddings SDK
     CALL aim_mistral.initialize()
 
-    IF sql_connected THEN
-        LET s = fill_quote_list(quote_list)
-    END IF
+    LET s = fill_quote_list(quote_list)
 
     DIALOG ATTRIBUTES(UNBUFFERED)
 
         DISPLAY ARRAY quote_list TO sr_quote_list.*
         END DISPLAY
 
-        INPUT BY NAME dbserver, provider, system_message,
+        INPUT BY NAME dbserver, dbsource, provider, system_message,
                       search_context, min_cosine_similarity, search_vector,
                       assistant_message, user_question,
                       llm_response
             ATTRIBUTES(WITHOUT DEFAULTS)
-
-            ON CHANGE dbserver
-               CALL sql_connect(dbserver)
-               IF fill_quote_list(quote_list) < 0 THEN
-                   ERROR "Test table does not yet exist, must create it"
-               END IF
-               CALL quote_list_attr.clear()
 
             ON CHANGE provider
                UPDATE famquote SET emb = NULL
@@ -155,25 +153,6 @@ MAIN
     CALL aim_mistral.cleanup()
 
 END MAIN
-
-PRIVATE DEFINE sql_connected BOOLEAN
-
-FUNCTION sql_connect(dbs STRING) RETURNS ()
-    IF sql_connected THEN
-        DISCONNECT "s1"
-        LET sql_connected = FALSE
-    END IF
-    CASE dbs
-    WHEN "pgs"
-        CONNECT TO "test1+driver='dbmpgs_9'" AS "s1" USER "pgsuser" USING "fourjs"
-    WHEN "ora"
-        CONNECT TO "idadev1+driver='dbmora_23'" AS "s1" USER "orauser" USING "fourjs"
-    OTHERWISE
-        DISPLAY "ERROR: Invalid DB type"
-        EXIT PROGRAM 1
-    END CASE
-    LET sql_connected = TRUE
-END FUNCTION
 
 FUNCTION init_sql_table() RETURNS ()
 

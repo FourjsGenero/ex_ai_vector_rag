@@ -3,7 +3,7 @@ HBOX (SPLITTER)
 VBOX
 GRID
 {
-SQL Database server: [dbs                                                  ]
+SQL Database server: [dbs                    ][src                         ]
 AI LLM provider:     [pro                                                  ]
 [b1                    ][b2                     ][b3                       ]
 }
@@ -70,8 +70,16 @@ END
 
 ATTRIBUTES
 
-COMBOBOX dbs = FORMONLY.dbserver, NOT NULL,
-  ITEMS = (("pgs","PostgreSQL"),("ora","Oracle"));
+COMBOBOX dbs = FORMONLY.dbserver, NOT NULL, NOENTRY,
+  ITEMS = (
+    ("pgs","PostgreSQL"),
+    ("ora","Oracle Database"),
+    ("mys","Oracle MySQL"),
+    ("snc","SQL Server"),
+    ("ifx","Informix"),
+    ("mdb","MariaDB")
+  );
+EDIT src = FORMONLY.dbsource, NOENTRY, STRETCH=X;
 COMBOBOX pro = FORMONLY.provider, NOT NULL,
   ITEMS = (
     ("openai","OpenAI/GPT"),
