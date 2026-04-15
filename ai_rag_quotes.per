@@ -4,7 +4,7 @@ VBOX
 GRID
 {
 SQL DB server/source:[dbs                    ][src                         ]
-AI provider/model:   [pro                    ][mod                         ]
+AI provider/model:   [pro            ][mod             ]Vector dim:[dim    ]
 [b1                    ][b2                     ][b3                       ]
 }
 END
@@ -78,7 +78,8 @@ COMBOBOX dbs = FORMONLY.dbserver, NOT NULL, NOENTRY,
     ("ifx","Informix"),
     ("mdb","MariaDB")
   );
-EDIT src = FORMONLY.dbsource, NOENTRY, STRETCH=X;
+EDIT src = FORMONLY.dbsource, NOENTRY, STRETCH=X, SCROLL;
+
 COMBOBOX pro = FORMONLY.ai_provider, NOT NULL,
   ITEMS = (
     ("openai","OpenAI/GPT"),
@@ -87,7 +88,8 @@ COMBOBOX pro = FORMONLY.ai_provider, NOT NULL,
     ("anthropic","Anthropic/Claude")
   ),
   COMMENT="WARNING: Changing AI provider resets generated vectors!";
-EDIT mod = FORMONLY.ai_model, STRETCH=X;
+EDIT mod = FORMONLY.ai_model, STRETCH=X, SCROLL;
+EDIT dim = FORMONLY.vector_dimension;
 
 BUTTON b1: init_sql_table,
    TEXT="1. Init SQL table";

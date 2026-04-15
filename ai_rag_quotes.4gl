@@ -4,6 +4,7 @@ IMPORT FGL aim_gemini
 IMPORT FGL aim_mistral
 IMPORT FGL aim_vectors
 
+--CONSTANT c_vector_dimension INTEGER = 512
 CONSTANT c_vector_dimension INTEGER = 1024
 
 TYPE t_famquote RECORD
@@ -53,6 +54,7 @@ MAIN
     DEFINE context_items DYNAMIC ARRAY OF t_context_item
     DEFINE user_question STRING = "Who is known for a famous quote about racism?"
     DEFINE llm_response STRING
+    DEFINE vector_dimension INTEGER
 
     OPEN FORM f1 FROM "ai_rag_quotes"
     DISPLAY FORM f1
@@ -77,6 +79,8 @@ MAIN
 
     CALL aim_vectors.initialize()
 
+    LET vector_dimension = c_vector_dimension
+
     LET s = fill_quote_list(quote_list)
 
     DIALOG ATTRIBUTES(UNBUFFERED)
@@ -84,7 +88,9 @@ MAIN
         DISPLAY ARRAY quote_list TO sr_quote_list.*
         END DISPLAY
 
-        INPUT BY NAME dbserver, dbsource, ai_provider, ai_model, system_message,
+        INPUT BY NAME dbserver, dbsource,
+                      ai_provider, ai_model, vector_dimension,
+                      system_message,
                       search_context, max_cosine_similarity, search_vector,
                       context_data, user_question,
                       llm_response
@@ -108,6 +114,7 @@ MAIN
            CALL quote_list_attr.clear()
            LET context_data = NULL
            LET llm_response = NULL
+           MESSAGE "SQL Table initialized, ready to be filled with data"
 
         ON ACTION fill_quote_list
            LET s = fill_quote_list(quote_list)
@@ -376,11 +383,13 @@ FUNCTION compute_vector_embeddings(
     DEFINE s, x, tt INTEGER
     DEFINE rec t_famquote
     DEFINE source STRING
-    DEFINE vector STRING
+    DEFINE vector TEXT
     DEFINE sqlcmd STRING
     DEFINE te_client aim_vectors.t_client
     DEFINE te_request aim_vectors.t_text_embedding_request
     DEFINE te_response aim_vectors.t_text_embedding_response
+
+    LOCATE vector IN MEMORY
 
     CALL _init_vector_embedding_request(ai_provider,te_client,te_request)
 
@@ -401,7 +410,7 @@ FUNCTION compute_vector_embeddings(
             EXIT FOREACH
         END IF
         LET vector = te_response.get_vector()
---display "vector = ", vector
+--display "UPDATE with vector = ", vector
         EXECUTE stmt2 USING vector, rec.pkey
     END FOREACH
 
@@ -452,20 +461,25 @@ FUNCTION find_matching_quotes(
     DEFINE sqlcmd STRING
     DEFINE rec t_famquote
     DEFINE cosim FLOAT
+    DEFINE vector TEXT -- Required for SQL Server...
+
+    LOCATE vector IN MEMORY
+    LET vector = search_vector
 
     LET sqlcmd = SFMT("SELECT %1 cosim,",
                        _vector_sql_cosine_distance(
+                          c_vector_dimension,
                           "emb",
                           _vector_sql_placeholder(c_vector_dimension)
                        )
                      ),
                      " pkey, author, language, quote FROM famquote ORDER BY cosim"
-display "SQL: ", sqlcmd
+--display "SQL: ", sqlcmd
     DECLARE c_fetch_related CURSOR FROM sqlcmd
     LET x = 0
     CALL context_items.clear()
-    FOREACH c_fetch_related USING search_vector INTO cosim, rec.*
-display rec.pkey, "  cosine similarity: ", (cosim using "--&.&&&&&&&"), "  max: ", max_cosine_similarity
+    FOREACH c_fetch_related USING vector INTO cosim, rec.*
+--display rec.pkey, "  cosine similarity: ", (cosim using "--&.&&&&&&&"), "  max: ", max_cosine_similarity
         IF cosim > max_cosine_similarity THEN EXIT FOREACH END IF
         LET x = x+1
         LET context_items[x].pkey = rec.pkey
@@ -479,17 +493,20 @@ END FUNCTION
 
 FUNCTION _vector_sql_data_type(dimension INTEGER) RETURNS STRING
     CASE fgl_db_driver_type()
+    WHEN "pgs" RETURN SFMT("VECTOR(%1)",dimension)
     WHEN "ora" RETURN SFMT("VECTOR(%1,FLOAT32)",dimension)
-    OTHERWISE  RETURN SFMT("VECTOR(%1)",dimension) -- PostgreSQL
+    WHEN "snc" RETURN SFMT("VECTOR(%1,FLOAT32)",dimension)
+    OTHERWISE RETURN "?"
     END CASE
 END FUNCTION
 
-FUNCTION _vector_sql_cosine_distance(op1 STRING, op2 STRING) RETURNS STRING
+FUNCTION _vector_sql_cosine_distance(dimension INTEGER, op1 STRING, op2 STRING) RETURNS STRING
     CASE fgl_db_driver_type()
     WHEN "pgs" RETURN SFMT("((%1) <=> (%2))", op1, op2)
     WHEN "ora" RETURN SFMT("VECTOR_DISTANCE((%1), (%2), COSINE)", op1, op2)
-    WHEN "snc" RETURN SFMT("VECTOR_DISTANCE('cosine', (%1), (%2))", op1, op2)
-    OTHERWISE  RETURN "?"
+    -- SQL Server bug? Must cast STRING/TEXT parameter to VECTOR!
+    WHEN "snc" RETURN SFMT("VECTOR_DISTANCE('cosine', (%1), CAST(%2 AS VECTOR(%3)) )", op1, op2, dimension)
+    OTHERWISE RETURN "?"
     END CASE
 END FUNCTION
 
@@ -497,6 +514,7 @@ FUNCTION _vector_sql_placeholder(dimension INTEGER) RETURNS STRING
     CASE fgl_db_driver_type()
     WHEN "pgs" RETURN SFMT("?::vector(%1)",dimension)
     WHEN "ora" RETURN SFMT("VECTOR(?,%1,FLOAT32)",dimension)
+    WHEN "snc" RETURN "?"
     OTHERWISE  RETURN "?"
     END CASE
 END FUNCTION
@@ -506,6 +524,7 @@ FUNCTION _vector_sql_fetch_expr(expr STRING, dimension INTEGER) RETURNS STRING
     CASE fgl_db_driver_type()
     WHEN "pgs" RETURN SFMT("%1::text",expr)
     WHEN "ora" RETURN expr -- Must be fetched into TEXT !
+    WHEN "snc" RETURN SFMT("CAST(%1 AS VARCHAR(MAX))",expr) -- Fetch into TEXT!
     OTHERWISE  RETURN expr
     END CASE
 END FUNCTION
