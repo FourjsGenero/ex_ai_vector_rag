@@ -77,6 +77,7 @@ Define the following environment variables, according to the AI provider:
 
 - Anthropic/Claude:
   - ANTHROPIC_API_KEY: The API Key
+  - VOYAGE_API_KEY: The API Key for embeddings
 - OpenAI/GPT:
   - OPENAI_API_KEY: The API Key
 - Google/Gemini:
