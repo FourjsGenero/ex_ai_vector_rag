@@ -41,12 +41,12 @@ MAIN
     DEFINE dbsource, dbuser, dbpswd, dbserver STRING
     DEFINE quote_list DYNAMIC ARRAY OF t_famquote
     DEFINE quote_list_attr DYNAMIC ARRAY OF t_famquote_attr
-    DEFINE search_context STRING = "Famous quotes related to political concerns"
+    DEFINE search_context STRING = "Quotes about political concerns"
     DEFINE max_cosine_similarity FLOAT = 0.45
     DEFINE search_vector STRING
     DEFINE context_data STRING
     DEFINE system_message STRING = `You are a middle-school teacher.
- You can answer questions about quotes made by real famous people or movie characters.
+ You can answer questions about quotes made by famous people or movie characters.
  Generate your answer using the relevant quotes provided between <quotes> XML markers.
  Always mention the famous quote and the author of the quote in your answer.
  If the answer is not in the context, just respond "I don't know".`
@@ -234,8 +234,8 @@ FUNCTION init_sql_table() RETURNS ()
       quote: "Life is like a box of chocolates. You never know what you’re gonna get."
      )
      ,(
-      pkey: 108, author: "Hubert Bonisseur de La Bath (movie character)", language: "French",
-      quote: "À l'occasion, je vous mettrai un petit coup de polish."
+      pkey: 108, author: "Mahatma Gandhi", language: "English",
+      quote: "I cried because I had no shoes, then I met a man who had no feet."
      )
      ,(
       pkey: 109, author: "Antoine de Saint-Exupéry", language: "French",
@@ -261,6 +261,14 @@ FUNCTION init_sql_table() RETURNS ()
      ,(
       pkey: 114, author: "Benjamin Franklin", language: "English",
       quote: "Tell me and I forget. Teach me and I remember. Involve me and I learn."
+     )
+     ,(
+      pkey: 115, author: "Socrate", language: "English",
+      quote: "The only true wisdom is in knowing you know nothing."
+     )
+     ,(
+      pkey: 116, author: "Oscar Wilde", language: "English",
+      quote: "There is only one thing in the world worse than being talked about, and that is not being talked about."
      )
     ]
 
