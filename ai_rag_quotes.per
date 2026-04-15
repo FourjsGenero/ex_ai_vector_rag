@@ -37,7 +37,7 @@ Search in local SQL database:
 [qrv                                                    ]
 [                                                       ]
 [                                                       ]
-Max cosine similarity:[csm   ]             [fma         ]
+Max cosine similarity:[csm   ][fma                      ]
 Assistant message for LLM:
 [amg                                                    ]
 [                                                       ]
@@ -107,9 +107,9 @@ TEXTEDIT smg = FORMONLY.system_message,
 TEXTEDIT qry = FORMONLY.search_context,
   STRETCH=Y, PLACEHOLDER="Enter a search context for quotes here";
 EDIT csm = FORMONLY.max_cosine_similarity, NOT NULL;
-BUTTON csv: search_vector, TEXT="Compute Vector", IMAGE="fa-cogs",
+BUTTON csv: search_vector, TEXT="4. Compute context vector", IMAGE="fa-cogs",
   COMMENT="Generate the vector from the search context";
-BUTTON fma: find_match, TEXT="Find in local DB", IMAGE="fa-database",
+BUTTON fma: find_match, TEXT="5. Find matching rows in local DB", IMAGE="fa-database",
   COMMENT="Find similar matching quotes in local SQL database";
 TEXTEDIT qrv = FORMONLY.search_vector, COLOR=RED,
   STRETCH=Y;
@@ -118,7 +118,7 @@ TEXTEDIT amg = FORMONLY.assistant_message,
 
 TEXTEDIT upr = FORMONLY.user_question,
   STRETCH=Y, PLACEHOLDER="Enter a user prompt for the LLM here";
-BUTTON qai: ask_llm, TEXT="Send to LLM", IMAGE="fa-send",
+BUTTON qai: ask_llm, TEXT="6. Send user question to LLM", IMAGE="fa-send",
   COMMENT="Send request to LLM";
 TEXTEDIT res = FORMONLY.llm_response,
   STRETCH=Y;
