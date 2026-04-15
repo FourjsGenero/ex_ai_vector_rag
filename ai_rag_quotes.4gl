@@ -91,6 +91,8 @@ MAIN
             ATTRIBUTES(WITHOUT DEFAULTS)
 
             ON CHANGE ai_provider
+               LET ai_model = _default_model(ai_provider)
+               LET search_vector = NULL
                UPDATE famquote SET emb = NULL
                LET s = fill_quote_list(quote_list)
                CALL quote_list_attr.clear()
@@ -160,6 +162,42 @@ MAIN
     CALL aim_vectors.cleanup()
 
 END MAIN
+
+PRIVATE DEFINE _ai_model_list DYNAMIC ARRAY OF RECORD
+        provider STRING,
+        model STRING
+    END RECORD = [
+
+        ( provider: "gemini", model: "gemini-3.1-pro-preview" ),
+        ( provider: "gemini", model: "gemini-3-pro-preview" ),
+        ( provider: "gemini", model: "gemini-3-flash-preview" ),
+        ( provider: "gemini", model: "gemini-2.5-flash" ),
+
+        ( provider: "openai", model: "gpt-5.2" ),
+        ( provider: "openai", model: "gpt-5-mini" ),
+        ( provider: "openai", model: "gpt-5-nano" ),
+        ( provider: "openai", model: "gpt-5-codex" ),
+        ( provider: "openai", model: "gpt-4.1" ),
+
+        ( provider: "anthropic", model: "claude-opus-4-6" ),
+        ( provider: "anthropic", model: "claude-sonnet-4-6" ),
+        ( provider: "anthropic", model: "claude-haiku-4-5" ),
+
+        ( provider: "mistral", model: "mistral-large-latest" ),
+        ( provider: "mistral", model: "mistral-medium-latest" ),
+        ( provider: "mistral", model: "mistral-small-latest" )
+
+    ]
+
+FUNCTION _default_model(ai_provider STRING) RETURNS STRING
+    DEFINE x INTEGER
+    LET x = _ai_model_list.search("provider",ai_provider)
+    IF x>0 THEN
+        RETURN _ai_model_list[x].model
+    ELSE
+        RETURN NULL
+    END IF
+END FUNCTION
 
 FUNCTION init_sql_table() RETURNS ()
 
@@ -343,7 +381,7 @@ FUNCTION compute_vector_embeddings(
     LET sqlcmd = SFMT("UPDATE famquote SET emb = %1 WHERE pkey = ?", _vector_sql_placeholder(c_vector_dimension))
 --display "SQL:", sqlcmd
     PREPARE stmt2 FROM sqlcmd
-    DECLARE c_compute_vectors CURSOR FROM "SELECT pkey, author, language, quote FROM famquote WHERE emb IS NULL ORDER BY pkey"
+    DECLARE c_compute_vectors CURSOR FROM "SELECT pkey, author, language, quote FROM famquote ORDER BY pkey"
     FOREACH c_compute_vectors INTO rec.*
         LET source = rec.author, " said: ", c_quote_delim, rec.quote, c_quote_delim
         LET x = x + 1

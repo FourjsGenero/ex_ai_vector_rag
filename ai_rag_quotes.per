@@ -83,11 +83,12 @@ EDIT src = FORMONLY.dbsource, NOENTRY, STRETCH=X;
 COMBOBOX pro = FORMONLY.ai_provider, NOT NULL,
   ITEMS = (
     ("openai","OpenAI/GPT"),
-    ("mistral","Mistral/Large"),
+    ("mistral","Mistral/Mistral"),
     ("gemini","Google/Gemini"),
     ("anthropic","Anthropic/Claude")
-);
-EDIT mod = FORMONLY.ai_model, NOENTRY, STRETCH=X;
+  ),
+  COMMENT="WARNING: Changing AI provider resets generated vectors!";
+EDIT mod = FORMONLY.ai_model, STRETCH=X;
 
 BUTTON b1: init_sql_table,
    TEXT="1. Init SQL table";
@@ -107,7 +108,8 @@ TEXTEDIT smg = FORMONLY.system_message,
 
 TEXTEDIT qry = FORMONLY.search_context,
   STRETCH=Y, PLACEHOLDER="Enter a search context for quotes here";
-EDIT csm = FORMONLY.max_cosine_similarity, NOT NULL;
+EDIT csm = FORMONLY.max_cosine_similarity, NOT NULL,
+  COMMENT="Max cosine distance must be adapted to the chosen embedding model";
 BUTTON csv: search_vector, TEXT="4. Compute context vector", IMAGE="fa-cogs",
   COMMENT="Generate the vector from the search context";
 BUTTON fma: find_match, TEXT="5. Find matching rows in local DB", IMAGE="fa-database",
