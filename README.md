@@ -52,8 +52,11 @@ This source code is under [MIT license](./LICENSE)
 This demo uses modules from the `fgl_ai_sdk` repository. You must first clone
 this repository, compile the AI SDK modules and set the FGLLDPATH environment
 variable to point to your local copy of `fgl_ai_sdk`.
+
+You may want to git clone the `fgl_ai_sdk` as sibling directory to your clone
+of this current repository, and then set FGLLDPATH as follows:
 ```bash
-$ export FGLLDPATH=<parent-path>/fgl_ai_sdk
+$ export FGLLDPATH="../fgl_ai_sdk"
 ```
 
 ## Usage
@@ -66,6 +69,7 @@ In order to have access to an AI provider API, register and get an API Key.
 
 - Anthropic/Claude:
   - https://platform.claude.com/docs/en/get-started
+  - Voyage AI for embeddings: https://dashboard.voyageai.com/organization/projects
 - OpenAI/GPT:
   - https://developers.openai.com/api/docs/quickstart
 - Google/Gemini:
@@ -99,7 +103,7 @@ After compilation, run the main program to start the demo:
 $ export ANTHROPIC_API_KEY="sk-ant-..."
 $ export VOYAGE_API_KEY="pa-b..."
 
-$ fglrun ai_rag_quotes.42m anthropic mydbsrc myuser mypswd
+$ fglrun ai_rag_quotes.42m "anthropic" "clause-opus-4-6" "mydbsrc" myuser mypswd
 ```
 
 ## TODO:
