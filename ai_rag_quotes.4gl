@@ -1,5 +1,3 @@
-IMPORT util
-
 IMPORT FGL aim_anthropic
 IMPORT FGL aim_openai
 IMPORT FGL aim_gemini
@@ -64,6 +62,9 @@ MAIN
     CALL aim_gemini.initialize()
     CALL aim_mistral.initialize()
 
+    -- Init embeddings SDK
+    CALL aim_mistral.initialize()
+
     IF sql_connected THEN
         LET s = fill_quote_list(quote_list)
     END IF
@@ -119,7 +120,7 @@ MAIN
         ON ACTION search_vector
            LET assistant_message = NULL
            LET llm_response = NULL
-           LET search_vector = compute_search_vector(provider,min_cosine_similarity,search_context)
+           LET search_vector = compute_search_vector(provider,search_context)
            IF search_vector IS NULL THEN
                CALL _mbox_ok("Could not compute search vector.")
            END IF
@@ -311,140 +312,97 @@ FUNCTION fill_quote_list_attrs(
 
 END FUNCTION
 
+FUNCTION _init_vector_embedding_request(
+    provider STRING,
+    te_client aim_vectors.t_client INOUT,
+    te_request aim_vectors.t_text_embedding_request INOUT
+) RETURNS ()
+    CASE provider
+    WHEN "anthropic" -- Must use VoyageAI for vector generation!
+        CALL te_client.set_defaults("voyageai","voyage-3-large")
+        CALL te_request.set_defaults(te_client,NULL)
+    WHEN "openai"
+        CALL te_client.set_defaults("openai","text-embedding-3-small")
+        CALL te_request.set_defaults(te_client,1024)
+    WHEN "mistral"
+        CALL te_client.set_defaults("mistral","mistral-embed")
+        CALL te_request.set_defaults(te_client,NULL) -- dim is always 1024 with mistral
+    WHEN "gemini"
+        CALL te_client.set_defaults("gemini","gemini-embedding-001")
+        CALL te_request.set_defaults(te_client,NULL)
+    OTHERWISE
+        DISPLAY "Unexpected AI provider: ", provider
+        EXIT PROGRAM 1
+    END CASE
+END FUNCTION
+
 FUNCTION compute_vector_embeddings(
     provider STRING
 ) RETURNS ()
 
-{
     DEFINE s, x, tt INTEGER
     DEFINE rec t_famquote
     DEFINE source STRING
     DEFINE vector STRING
     DEFINE sqlcmd STRING
-    --
-    DEFINE oai_client OpenAI.t_client
-    DEFINE oai_te_request OpenAI.t_text_embedding_request
-    DEFINE oai_te_response OpenAI.t_text_embedding_response
-    --
-    DEFINE gem_client Gemini.t_client
-    DEFINE gem_te_request Gemini.t_text_embedding_request
-    DEFINE gem_te_response Gemini.t_text_embedding_response
+    DEFINE te_client aim_vectors.t_client
+    DEFINE te_request aim_vectors.t_text_embedding_request
+    DEFINE te_response aim_vectors.t_text_embedding_response
 
-    CASE provider
-    WHEN "openai"
-        CALL oai_client.set_defaults_openai("text-embedding-3-small")
-        CALL oai_te_request.set_defaults(oai_client,c_vector_dimension)
-    WHEN "mistral"
-        CALL oai_client.set_defaults_mistral("mistral-embed")
-        CALL oai_te_request.set_defaults(oai_client,NULL)
-    WHEN "anthropic" -- Must use VoyageAI for vector generation!
-        CALL oai_client.set_defaults_voyageai("voyage-3-large")
-        CALL oai_te_request.set_defaults(oai_client,NULL)
-    WHEN "gemini"
-        CALL gem_client.set_defaults_gemini(Gemini.embedding_models[1])
-        CALL gem_te_request.set_defaults(gem_client,c_vector_dimension)
-    END CASE
+    CALL _init_vector_embedding_request(provider,te_client,te_request)
 
     SELECT COUNT(*) INTO tt FROM famquote
 
     LET sqlcmd = SFMT("UPDATE famquote SET emb = %1 WHERE pkey = ?", _vector_sql_placeholder(c_vector_dimension))
-display "SQL:", sqlcmd
+--display "SQL:", sqlcmd
     PREPARE stmt2 FROM sqlcmd
     DECLARE c_compute_vectors CURSOR FROM "SELECT pkey, author, language, quote FROM famquote WHERE emb IS NULL ORDER BY pkey"
     FOREACH c_compute_vectors INTO rec.*
         LET source = rec.author, " said: ", c_rag_info_delimiter, rec.quote, c_rag_info_delimiter
         LET x = x + 1
         MESSAGE SFMT("Computing vector: %1/%2", x, tt); CALL ui.Interface.refresh()
-        CASE provider
-        WHEN "gemini"
-            CALL gem_te_request.set_source(source)
-            LET s = gem_client.send_text_embedding_request(gem_te_request,gem_te_response)
-        OTHERWISE -- openai, mistral, anthropic
-            CALL oai_te_request.set_source(source)
-            LET s = oai_client.send_text_embedding_request(oai_te_request,oai_te_response)
-        END CASE
+        CALL te_request.set_source(source)
+        LET s = te_client.send_text_embedding_request(te_request,te_response)
         IF s < 0 THEN
             CALL _mbox_ok(SFMT("ERROR: Could not get text embedding from %1.\n Probably HTTP 429? Try again.",provider))
-            GOTO comp_emb_end
+            EXIT FOREACH
         END IF
-        CASE provider
-        WHEN "gemini"
-            LET vector = gem_te_response.get_vector()
-        OTHERWISE -- openai, mistral, anthropic
-            LET vector = oai_te_response.get_vector()
-        END CASE
+        LET vector = te_response.get_vector()
         EXECUTE stmt2 USING vector, rec.pkey
     END FOREACH
 
-LABEL comp_emb_end:
     MESSAGE ""
-}
 
 END FUNCTION
 
 FUNCTION compute_search_vector(
     provider STRING,
-    min_cosine_similarity FLOAT,
-    search_context STRING
+    source STRING
 ) RETURNS STRING
 
     DEFINE vector STRING
-{
-    DEFINE s, x INTEGER
-    DEFINE sqlcmd STRING
-    DEFINE rec t_famquote
-    DEFINE cosim FLOAT
-    --
-    DEFINE oai_client OpenAI.t_client
-    DEFINE oai_te_request OpenAI.t_text_embedding_request
-    DEFINE oai_te_response OpenAI.t_text_embedding_response
-    --
-    DEFINE gem_client Gemini.t_client
-    DEFINE gem_te_request Gemini.t_text_embedding_request
-    DEFINE gem_te_response Gemini.t_text_embedding_response
+    DEFINE s INTEGER
+    DEFINE te_client aim_vectors.t_client
+    DEFINE te_request aim_vectors.t_text_embedding_request
+    DEFINE te_response aim_vectors.t_text_embedding_response
 
-    CASE provider
-    WHEN "openai"
-        CALL oai_client.set_defaults_openai("text-embedding-3-small")
-        CALL oai_te_request.set_defaults(oai_client,c_vector_dimension)
-    WHEN "mistral"
-        CALL oai_client.set_defaults_mistral("mistral-embed")
-        CALL oai_te_request.set_defaults(oai_client,NULL)
-    WHEN "anthropic" -- Must use VoyageAI for vector generation!
-        CALL oai_client.set_defaults_voyageai("voyage-3-large")
-        CALL oai_te_request.set_defaults(oai_client,NULL)
-    WHEN "gemini"
-        CALL gem_client.set_defaults_gemini(Gemini.embedding_models[1])
-        CALL gem_te_request.set_defaults(gem_client,c_vector_dimension)
-    END CASE
+    CALL _init_vector_embedding_request(provider,te_client,te_request)
 
     MESSAGE "Waiting for answer..."; CALL ui.Interface.refresh()
 
-    -- Generate a vector from some search text
-    CASE provider
-    WHEN "gemini"
-        CALL gem_te_request.set_source(search_context)
-        LET s = gem_client.send_text_embedding_request(gem_te_request,gem_te_response)
-    OTHERWISE -- openai, mistral, anthropic
-        CALL oai_te_request.set_source(search_context)
-        LET s = oai_client.send_text_embedding_request(oai_te_request,oai_te_response)
-    END CASE
+    CALL te_request.set_source(source)
+    LET s = te_client.send_text_embedding_request(te_request,te_response)
     IF s < 0 THEN
-        CALL _mbox_ok(SFMT("ERROR: Could not get text embedding from %1",oai_client.connection.provider))
-        MESSAGE ""
-        RETURN NULL
+        CALL _mbox_ok(SFMT("ERROR: Could not get text embedding from %1.\n",provider))
+        LET vector = NULL
+    ELSE
+        LET vector = te_response.get_vector()
     END IF
-    CASE provider
-    WHEN "gemini"
-        LET vector = gem_te_response.get_vector()
-    OTHERWISE -- openai, mistral, anthropic
-        LET vector = oai_te_response.get_vector()
-    END CASE
---display "Source text    = ", search_context
---display "Context vector = ", vector
+
+display "Source text    = ", source
+display "Context vector = ", vector
 
     MESSAGE ""
-}
 
     RETURN vector
 
@@ -456,7 +414,7 @@ FUNCTION find_matching_quotes(
     context_items DYNAMIC ARRAY OF t_context_item
 ) RETURNS INTEGER
 
-    DEFINE s, x INTEGER
+    DEFINE x INTEGER
     DEFINE sqlcmd STRING
     DEFINE rec t_famquote
     DEFINE cosim FLOAT
@@ -497,6 +455,7 @@ FUNCTION _vector_sql_placeholder(dimension INTEGER) RETURNS STRING
 END FUNCTION
 
 FUNCTION _vector_sql_fetch_expr(expr STRING, dimension INTEGER) RETURNS STRING
+    LET dimension = NULL
     CASE fgl_db_driver_type()
     WHEN "pgs" RETURN SFMT("%1::text",expr)
     WHEN "ora" RETURN expr -- Must be fetched into TEXT !
@@ -509,7 +468,7 @@ FUNCTION build_assistant_message(
     context_items DYNAMIC ARRAY OF t_context_item
 ) RETURNS STRING
 
-    DEFINE s, x INTEGER
+    DEFINE x INTEGER
     DEFINE result_set base.StringBuffer
 
     LET result_set = base.StringBuffer.create()
@@ -530,6 +489,10 @@ FUNCTION send_question_to_llm(
 ) RETURNS STRING
 
     DEFINE result STRING
+let provider =null
+let system_message =null
+let assistant_message =null
+let question =null
 {
     DEFINE s, x INTEGER
     --
