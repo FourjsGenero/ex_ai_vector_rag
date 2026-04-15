@@ -1,19 +1,6 @@
 <?xml version="1.0" encoding="ANSI_X3.4-1968"?>
 
 <StyleList>
-  <Style name="Image">
-     <StyleAttribute name="border" value="none" />
-     <StyleAttribute name="alignment" value="center" />
-  </Style>
-  <Style name="TextEdit.system">
-     <StyleAttribute name="backgroundColor" value="lightRed" />
-  </Style>
-  <Style name="TextEdit.user">
-     <StyleAttribute name="backgroundColor" value="lightBlue" />
-  </Style>
-  <Style name="TextEdit.assistant">
-     <StyleAttribute name="backgroundColor" value="lightOrange" />
-  </Style>
   <Style name="ScrollGrid.style1">
      <StyleAttribute name="backgroundColor" value="white" />
      <StyleAttribute name="highlightCurrentRow" value="no"/>

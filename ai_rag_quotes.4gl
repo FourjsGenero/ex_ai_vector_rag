@@ -68,6 +68,7 @@ MAIN
     CALL aim_openai.initialize()
     CALL aim_gemini.initialize()
     CALL aim_mistral.initialize()
+    CALL aim_vectors.initialize()
 
     -- Init embeddings SDK
     CALL aim_mistral.initialize()
@@ -151,6 +152,7 @@ MAIN
     CALL aim_openai.cleanup()
     CALL aim_gemini.cleanup()
     CALL aim_mistral.cleanup()
+    CALL aim_vectors.cleanup()
 
 END MAIN
 
@@ -226,7 +228,7 @@ FUNCTION init_sql_table() RETURNS ()
                   || " pkey INT, author VARCHAR(50), language VARCHAR(50), quote VARCHAR(2000)"
                   || SFMT(", emb %1", _vector_sql_data_type(c_vector_dimension) )
                   || ")"
-display "SQL: ", sqlcmd
+--display "SQL: ", sqlcmd
     EXECUTE IMMEDIATE sqlcmd
 
     -- First insert rows without embeddings
@@ -253,7 +255,7 @@ FUNCTION fill_quote_list(
     LET sqlcmd = "SELECT pkey, author, language, quote"
                   || SFMT(", %1", _vector_sql_fetch_expr("emb",c_vector_dimension))
                   || " FROM famquote ORDER BY pkey"
-display "SQL:", sqlcmd
+--display "SQL:", sqlcmd
     DECLARE c_fill_quote_list CURSOR FROM sqlcmd
     CALL arr.clear()
     OPEN c_fill_quote_list
