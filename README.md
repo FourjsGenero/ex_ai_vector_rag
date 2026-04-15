@@ -41,6 +41,10 @@ This source code is under [MIT license](./LICENSE)
 * Latest Genero version
 * GNU Make
 * FGL AI API SDK from `fgl_ai_sdk` repository
+* SQL database versions and requirements:
+  - PostgreSQL: Install pgvector/pgvectorscale extensions
+  - Oracle DB: Must be Oracle 26ai with VECTOR type support
+  - SQL Server: Must be SQL Server 2025 with VECTOR type support
 
 ## Setup
 
@@ -92,7 +96,7 @@ After compilation, run the main program to start the demo:
 ```
 $ export ANTHROPIC_API_KEY="sk-ant-..."
 
-$ fglrun ragdemo.42m
+$ fglrun ai_rag_quotes.42m
 ```
 
 ## TODO:

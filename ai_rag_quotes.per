@@ -1,0 +1,122 @@
+LAYOUT (WINDOWSTYLE="main2",TEXT="Retrieval Augmented Generation (RAG)")
+HBOX (SPLITTER)
+VBOX
+GRID
+{
+SQL Database server: [dbs                                                  ]
+AI LLM provider:     [pro                                                  ]
+[b1                    ][b2                     ][b3                       ]
+}
+END
+SCROLLGRID (WANTFIXEDPAGESIZE=NO,STYLE="style1")
+{
+---------------------------------------------------------------------------
+[qid  ] [qau                ][qlg           ]    Vector Embedding
+[qtx                                           ][qve                      ]
+[                                              ][                         ]
+[                                              ][                         ]
+[                                              ][                         ]
+}
+END
+END
+VBOX
+GRID
+{
+System prompt for LLM:
+[smg                                                    ]
+[                                                       ]
+[                                                       ]
+[                                                       ]
+[                                                       ]
+[                                                       ]
+Search in local SQL database:
+[qry                                                    ]
+[                                                       ]
+[                                                       ]
+                                           [csv         ]
+[qrv                                                    ]
+[                                                       ]
+[                                                       ]
+Min cosine similarity:[csm   ]             [fma         ]
+Assistant message for LLM:
+[amg                                                    ]
+[                                                       ]
+[                                                       ]
+[                                                       ]
+[                                                       ]
+[                                                       ]
+[                                                       ]
+[                                                       ]
+User prompt for LLM:
+[upr                                                    ]
+[                                                       ]
+[                                                       ]
+                                               [qai     ]
+Response:
+[res                                                    ]
+[                                                       ]
+[                                                       ]
+[                                                       ]
+[                                                       ]
+[                                                       ]
+[                                                       ]
+[                                                       ]
+[                                                       ]
+}
+END
+END
+END
+END
+
+ATTRIBUTES
+
+COMBOBOX dbs = FORMONLY.dbserver, NOT NULL,
+  ITEMS = (("pgs","PostgreSQL"),("ora","Oracle"));
+COMBOBOX pro = FORMONLY.provider, NOT NULL,
+  ITEMS = (
+    ("openai","OpenAI/GPT"),
+    ("mistral","Mistral/Large"),
+    ("gemini","Google/Gemini"),
+    ("anthropic","Anthropic/Claude")
+);
+
+BUTTON b1: init_sql_table,
+   TEXT="1. Init SQL table";
+BUTTON b2: fill_quote_list,
+   TEXT="2. Load quotes list";
+BUTTON b3: compute_vector_embeddings,
+   TEXT="3. Compute embeddings";
+
+LABEL qid = FORMONLY.ql_id;
+LABEL qau = FORMONLY.ql_author;
+LABEL qlg = FORMONLY.ql_language;
+TEXTEDIT qtx = FORMONLY.ql_quote;
+TEXTEDIT qve = FORMONLY.ql_vector, COLOR=RED;
+
+TEXTEDIT smg = FORMONLY.system_message,
+  STRETCH=Y, PLACEHOLDER="Enter the system message for the LLM here";
+
+TEXTEDIT qry = FORMONLY.search_context,
+  STRETCH=Y, PLACEHOLDER="Enter a search context for quotes here";
+EDIT csm = FORMONLY.min_cosine_similarity, NOT NULL;
+BUTTON csv: search_vector, TEXT="Compute Vector", IMAGE="fa-cogs",
+  COMMENT="Generate the vector from the search context";
+BUTTON fma: find_match, TEXT="Find in local DB", IMAGE="fa-database",
+  COMMENT="Find similar matching quotes in local SQL database";
+TEXTEDIT qrv = FORMONLY.search_vector, COLOR=RED,
+  STRETCH=Y;
+TEXTEDIT amg = FORMONLY.assistant_message,
+  STRETCH=Y;
+
+TEXTEDIT upr = FORMONLY.user_question,
+  STRETCH=Y, PLACEHOLDER="Enter a user prompt for the LLM here";
+BUTTON qai: ask_llm, TEXT="Send to LLM", IMAGE="fa-send",
+  COMMENT="Send request to LLM";
+TEXTEDIT res = FORMONLY.llm_response,
+  STRETCH=Y;
+
+END
+
+INSTRUCTIONS
+SCREEN RECORD sr_quote_list(FORMONLY.ql_id THRU FORMONLY.ql_vector);
+END
