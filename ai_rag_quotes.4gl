@@ -401,9 +401,13 @@ FUNCTION find_matching_quotes(
     DEFINE rec t_famquote
     DEFINE cosim FLOAT
 
-    LET sqlcmd = SFMT("SELECT (emb <=> %1) cosim,", _vector_sql_placeholder(c_vector_dimension))
-                  || " pkey, author, language, quote FROM famquote"
-                  || " ORDER BY cosim"
+    LET sqlcmd = SFMT("SELECT %1 cosim,",
+                       _vector_sql_cosine_distance(
+                          "emb",
+                          _vector_sql_placeholder(c_vector_dimension)
+                       )
+                     ),
+                     " pkey, author, language, quote FROM famquote ORDER BY cosim"
 display "SQL: ", sqlcmd
     DECLARE c_fetch_related CURSOR FROM sqlcmd
     LET x = 0
@@ -428,11 +432,20 @@ FUNCTION _vector_sql_data_type(dimension INTEGER) RETURNS STRING
     END CASE
 END FUNCTION
 
+FUNCTION _vector_sql_cosine_distance(op1 STRING, op2 STRING) RETURNS STRING
+    CASE fgl_db_driver_type()
+    WHEN "pgs" RETURN SFMT("((%1) <=> (%2))", op1, op2)
+    WHEN "ora" RETURN SFMT("VECTOR_DISTANCE((%1), (%2), COSINE)", op1, op2)
+    WHEN "snc" RETURN SFMT("VECTOR_DISTANCE('cosine', (%1), (%2))", op1, op2)
+    OTHERWISE  RETURN "?"
+    END CASE
+END FUNCTION
+
 FUNCTION _vector_sql_placeholder(dimension INTEGER) RETURNS STRING
     CASE fgl_db_driver_type()
     WHEN "pgs" RETURN SFMT("?::vector(%1)",dimension)
     WHEN "ora" RETURN SFMT("VECTOR(?,%1,FLOAT32)",dimension)
-    OTHERWISE  RETURN "?" -- Oracle
+    OTHERWISE  RETURN "?"
     END CASE
 END FUNCTION
 
