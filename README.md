@@ -97,7 +97,7 @@ After compilation, run the main program to start the demo:
 ```
 $ export ANTHROPIC_API_KEY="sk-ant-..."
 
-$ fglrun ai_rag_quotes.42m
+$ fglrun ai_rag_quotes.42m anthropic mydbsrc myuser mypswd
 ```
 
 ## TODO:
