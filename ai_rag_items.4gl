@@ -22,11 +22,6 @@ TYPE t_item_attr RECORD
        emb STRING
      END RECORD
 
-TYPE t_context_item RECORD
-       pkey INT,
-       data STRING
-     END RECORD
-
 PRIVATE CONSTANT c_ai_provider_gemini = "gemini"
 PRIVATE CONSTANT c_ai_provider_anthropic = "anthropic"
 PRIVATE CONSTANT c_ai_provider_mistral = "mistral"
@@ -45,19 +40,42 @@ END RECORD
 
 CONSTANT c_system_message STRING =
 `<role>
-You are a nice and friendly supermarket assistant.
+You are a helpful, friendly supermarket assistant. Your tone is polite and concise.
 </role>
+<context>
+You have access to a specific inventory list provided within <items> and </items> markers.
+</context>
 <task>
-You can answer customer questions about available items.
+Answer customer inquiries using ONLY the information provided in the items list, by using their descriptions.
 </task>
-<instruction>
-Focus on item descriptions provided within <items> and </items> XML markers.
-Always mention the item short names in your answer.
-If the provided items do not match the user question, just respond:
-  "I need more information to help you."
-</instruction>
+<instructions>
+- INPUT
+  - Items available in the supermarked are provided within <items> and </items> markers, as a JSON array,
+    where each element contains the "pkey", "short_name" and "description" properties.
+    For example:
+    <items>
+    [
+       { "pkey": 404, "short_name": "Athletic Running Shorts", "category": "Sport",
+         "description": "Moisture-wicking polyester shorts with built-in liner and key pocket."
+       },
+       { "pkey": 105, "short_name": "Basmati Rice - 5kg", "category": "Food",
+         "description": "Long-grain aromatic basmati rice, aged for flavor. Ideal for pilafs and curries."
+       }
+    ]
+    </items>
+- RESOURCES
+  - Do not use outside knowledge of supermarked stores, if you cannot find in the provided items list.
+- OUTPUT
+  - Always mention the item short names in your answer, with pkey id in parentheses.
+    For example:
+    "We have "Basmati Rice - 5kg" (id:105), if you want to cook Indian food."
+- NO HALLUCINATIONS
+  - Do not mention items, prices, or details that are not explicitly defined in the item list.
+- STRICT ADHERENCE
+  - If the user asks for an item not found in the items list, or if the list is empty, you MUST respond exactly with:
+       "I need more information to help you."
+</instructions>
 `
-
 MAIN
     DEFINE params t_parameters
     DEFINE params_file TEXT
@@ -71,7 +89,7 @@ MAIN
     DEFINE search_vector STRING
     DEFINE context_data STRING
     DEFINE system_message STRING = c_system_message
-    DEFINE context_items DYNAMIC ARRAY OF t_context_item
+    DEFINE context_items DYNAMIC ARRAY OF t_item
     DEFINE user_question STRING
          = "I am a tennis player, what do you suggest me?"
          #= "Can I find running shoes here?"
@@ -222,7 +240,7 @@ MAIN
                LET context_data = NULL
                CALL _mbox_ok("No matching items found in database!\nIncrease MAX cosine similarity.")
            ELSE
-               LET context_data = build_context_data(search_context,context_items)
+               LET context_data = build_context_data(context_items)
                CALL fill_item_list_attrs(item_list,context_items,item_list_attr)
                CALL _mbox_ok(SFMT("Found %1 matching items in database!",x))
            END IF
@@ -358,7 +376,7 @@ END FUNCTION
 
 FUNCTION fill_item_list_attrs(
     item_list DYNAMIC ARRAY OF t_item,
-    context_items DYNAMIC ARRAY OF t_context_item,
+    context_items DYNAMIC ARRAY OF t_item,
     item_list_attr DYNAMIC ARRAY OF t_item_attr
 ) RETURNS ()
 
@@ -432,6 +450,7 @@ FUNCTION compute_vector_embeddings(
     DECLARE c_compute_vectors CURSOR FROM "SELECT pkey, short_name, category, description FROM smitems ORDER BY pkey"
     FOREACH c_compute_vectors INTO rec.*
         LET source = _build_context_data(rec)
+display "context data: ", source
         LET x = x + 1
         MESSAGE SFMT("Computing vector: %1/%2", x, tt); CALL ui.Interface.refresh()
         CALL te_request.set_source(source)
@@ -487,7 +506,7 @@ FUNCTION find_matching_items(
     max_cosine_similarity FLOAT,
     search_vector STRING,
     vector_dimension INTEGER,
-    context_items DYNAMIC ARRAY OF t_context_item
+    context_items DYNAMIC ARRAY OF t_item
 ) RETURNS INTEGER
 
     DEFINE x INTEGER
@@ -506,17 +525,16 @@ FUNCTION find_matching_items(
                           _vector_sql_placeholder(vector_dimension)
                        )
                      ),
-                     " pkey, short_name FROM smitems ORDER BY cosim"
+                     " pkey, short_name, category, description FROM smitems ORDER BY cosim"
 display "SQL: ", sqlcmd
     DECLARE c_fetch_related CURSOR FROM sqlcmd
     LET x = 0
     CALL context_items.clear()
-    FOREACH c_fetch_related USING vector INTO cosim, rec.pkey, rec.short_name
+    FOREACH c_fetch_related USING vector INTO cosim, rec.*
 display rec.pkey, "  cosine similarity: ", (cosim using "--&.&&&&&&&"), "  max: ", max_cosine_similarity
         IF cosim > max_cosine_similarity THEN EXIT FOREACH END IF
         LET x = x+1
-        LET context_items[x].pkey = rec.pkey
-        LET context_items[x].data = _build_context_data(rec)
+        LET context_items[x] = rec
     END FOREACH
 
     RETURN context_items.getLength()
@@ -562,22 +580,14 @@ FUNCTION _vector_sql_fetch_expr(expr STRING, vector_dimension INTEGER) RETURNS S
 END FUNCTION
 
 FUNCTION build_context_data(
-    search_context STRING,
-    context_items DYNAMIC ARRAY OF t_context_item
+    context_items DYNAMIC ARRAY OF t_item
 ) RETURNS STRING
-
-    DEFINE x INTEGER
     DEFINE result_set base.StringBuffer
-
     LET result_set = base.StringBuffer.create()
-    CALL result_set.append(search_context || ":")
-    CALL result_set.append("<items>")
-    FOR x = 1 TO context_items.getLength()
-        CALL result_set.append("\n- "||context_items[x].data)
-    END FOR
+    CALL result_set.append("<items>\n")
+    CALL result_set.append(util.JSON.format(util.JSON.stringify(context_items)))
     CALL result_set.append("\n</items>")
     RETURN result_set.toString()
-
 END FUNCTION
 
 FUNCTION send_question_to_ai(
