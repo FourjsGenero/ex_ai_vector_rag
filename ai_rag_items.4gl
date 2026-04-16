@@ -63,6 +63,8 @@ MAIN
     DEFINE params_file TEXT
     DEFINE dbserver STRING
     DEFINE x, s INTEGER
+    DEFINE prev_ai_provider STRING
+    DEFINE prev_vector_dim INTEGER
     DEFINE item_list DYNAMIC ARRAY OF t_item
     DEFINE item_list_attr DYNAMIC ARRAY OF t_item_attr
     DEFINE search_context STRING = "Sport articles"
@@ -144,11 +146,31 @@ MAIN
                       llm_response
             ATTRIBUTES(WITHOUT DEFAULTS)
 
+            BEFORE FIELD ai_provider
+               LET prev_ai_provider = params.ai_provider
             ON CHANGE ai_provider
+               IF NOT _mbox_yn("Provider change implies vector re-calculation, proceed?") THEN
+                  LET params.ai_provider = prev_ai_provider
+                  CONTINUE DIALOG
+               END IF
+               LET prev_ai_provider = params.ai_provider
                LET params.ai_model = _default_model(params.ai_provider)
                LET search_vector = NULL
                UPDATE smitems SET emb = NULL
                LET s = fill_item_list(item_list,params.vector_dimension)
+               CALL item_list_attr.clear()
+
+            BEFORE FIELD vector_dimension
+               LET prev_vector_dim = params.vector_dimension
+            ON CHANGE vector_dimension
+               IF NOT _mbox_yn("Dimension change implies SQL table re-init, proceed?") THEN
+                  LET params.vector_dimension = prev_vector_dim
+                  CONTINUE DIALOG
+               END IF
+               LET prev_vector_dim = params.vector_dimension
+               LET search_vector = NULL
+               CALL init_sql_table(params.data_file,params.vector_dimension)
+               CALL item_list.clear()
                CALL item_list_attr.clear()
 
         END INPUT
@@ -655,4 +677,13 @@ PRIVATE FUNCTION _mbox_ok(msg STRING) RETURNS ()
     MENU "RAG sample" ATTRIBUTES(STYLE="dialog",COMMENT=msg)
         COMMAND "Ok" EXIT MENU
     END MENU
+END FUNCTION
+
+PRIVATE FUNCTION _mbox_yn(msg STRING) RETURNS BOOLEAN
+    DEFINE r BOOLEAN
+    MENU "RAG sample" ATTRIBUTES(STYLE="dialog",COMMENT=msg)
+        COMMAND "Yes" LET r=TRUE
+        COMMAND "No"  LET r=FALSE
+    END MENU
+    RETURN r
 END FUNCTION

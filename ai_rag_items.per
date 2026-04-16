@@ -118,7 +118,8 @@ COMBOBOX pro = FORMONLY.ai_provider, NOT NULL,
   ),
   COMMENT="WARNING: Changing AI provider resets generated vectors!";
 EDIT mod = FORMONLY.ai_model, STRETCH=X, SCROLL;
-EDIT dim = FORMONLY.vector_dimension;
+COMBOBOX dim = FORMONLY.vector_dimension, NOT NULL,
+  ITEMS = (128, 384, 768, 1024, 1536);
 
 BUTTON b1: init_sql_table,
    TEXT="1. Init SQL table";
