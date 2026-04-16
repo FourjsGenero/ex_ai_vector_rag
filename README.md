@@ -24,10 +24,6 @@ YOU MUST EVALUATE THE SECURITY, PRIVACY, AND CONFIDENTIALITY IMPLICATIONS OF SHA
 INFORMATION WITH THESE PROVIDERS. THE AUTHORS ARE NOT LIABLE FOR ANY DATA BREACHES OR MISUSE
 OF INFORMATION BY THIRD-PARTY AI ENTITIES.
 
-## Screenshots
-
-![Genero Vector RAG demo](https://github.com/FourjsGenero/ex_ai_vector_rag/raw/master/docs/screen-001.png)
-
 ## Supported AI providers and services
 
 Supported AI Providers:
