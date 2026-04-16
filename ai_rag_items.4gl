@@ -90,10 +90,12 @@ MAIN
     DEFINE context_data STRING
     DEFINE system_message STRING = c_system_message
     DEFINE context_items DYNAMIC ARRAY OF t_item
-    DEFINE user_question STRING
-         = "I am a tennis player, what do you suggest me?"
-         #= "Can I find running shoes here?"
-    DEFINE llm_response STRING
+    DEFINE user_question_1 STRING = "I am a tennis player, what do you suggest me?"
+    DEFINE llm_response_1 STRING
+    DEFINE user_question_2 STRING = "Can I find running shoes here?"
+    DEFINE llm_response_2 STRING
+
+    CALL ui.Interface.loadStyles("styles.4st")
 
     OPEN FORM f1 FROM "ai_rag_items"
     DISPLAY FORM f1
@@ -149,7 +151,7 @@ MAIN
 
     DIALOG ATTRIBUTES(UNBUFFERED)
 
-        DISPLAY ARRAY item_list TO sr_item_list.*
+        DISPLAY ARRAY item_list TO sr_item_list.* ATTRIBUTES(FOCUSONFIELD)
         END DISPLAY
 
         INPUT BY NAME dbserver, params.dbsource,
@@ -160,8 +162,8 @@ MAIN
                       params.max_cosine_similarity,
                       search_vector,
                       context_data,
-                      user_question,
-                      llm_response
+                      user_question_1, llm_response_1,
+                      user_question_2, llm_response_2
             ATTRIBUTES(WITHOUT DEFAULTS)
 
             BEFORE FIELD ai_provider
@@ -204,25 +206,28 @@ MAIN
            CALL item_list.clear()
            CALL item_list_attr.clear()
            LET context_data = NULL
-           LET llm_response = NULL
+           LET llm_response_1 = NULL
+           LET llm_response_2 = NULL
            MESSAGE "SQL Table initialized, ready to be filled with data"
 
         ON ACTION fill_item_list
            LET s = fill_item_list(item_list,params.vector_dimension)
            CALL item_list_attr.clear()
            LET context_data = NULL
-           LET llm_response = NULL
+           LET llm_response_1 = NULL
+           LET llm_response_2 = NULL
 
         ON ACTION compute_vector_embeddings
            CALL compute_vector_embeddings(params.ai_provider,params.vector_dimension)
            LET s = fill_item_list(item_list,params.vector_dimension)
            CALL item_list_attr.clear()
            LET context_data = NULL
-           LET llm_response = NULL
+           LET llm_response_1 = NULL
+           LET llm_response_2 = NULL
 
         ON ACTION search_vector
            LET context_data = NULL
-           LET llm_response = NULL
+           LET llm_response_1 = NULL
            LET search_vector = compute_search_vector(params.ai_provider,
                                                      params.vector_dimension,
                                                      search_context)
@@ -231,7 +236,7 @@ MAIN
            END IF
 
         ON ACTION find_match
-           LET llm_response = NULL
+           LET llm_response_1 = NULL
            IF search_vector IS NULL THEN
                CALL _mbox_ok("First you need to compute the search vector from context sentence.")
                CONTINUE DIALOG
@@ -248,12 +253,13 @@ MAIN
                CALL _mbox_ok(SFMT("Found %1 matching items in database!",x))
            END IF
 
-        ON ACTION ask_llm
-           LET llm_response =
-               send_question_to_ai(params.ai_provider, system_message, context_data, user_question)
-           IF llm_response IS NOT NULL THEN
-               NEXT FIELD llm_response
-           END IF
+        ON ACTION ask_llm_1
+           LET llm_response_1 =
+               send_question_to_ai_1(params.ai_provider, system_message, context_data, user_question_1)
+
+        ON ACTION ask_llm_2
+           LET llm_response_2 =
+               NULL --send_question_to_ai_2(params.ai_provider, system_message, user_question_1)
 
         ON ACTION close
            EXIT DIALOG
@@ -608,7 +614,7 @@ FUNCTION build_context_data(
     RETURN result_set.toString()
 END FUNCTION
 
-FUNCTION send_question_to_ai(
+FUNCTION send_question_to_ai_1(
     ai_provider STRING,
     system_message STRING,
     context_data STRING,

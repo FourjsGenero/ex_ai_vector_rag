@@ -2,9 +2,8 @@
 
 <StyleList>
   <Style name="ScrollGrid.style1">
-     <StyleAttribute name="backgroundColor" value="white" />
      <StyleAttribute name="highlightCurrentRow" value="no"/>
-     <StyleAttribute name="highlightCurrentCell" value="no"/>
+     <StyleAttribute name="highlightCurrentCell" value="yes"/>
   </Style>
   <Style name="Window">
      <StyleAttribute name="windowType" value="normal" />

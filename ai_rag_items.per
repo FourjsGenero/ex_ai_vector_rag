@@ -15,11 +15,11 @@ END
 
 SCROLLGRID (WANTFIXEDPAGESIZE=NO,STYLE="style1")
 {
----------------------------------------------------------------------------
+-----------------------------------------------------------------------------------
 [id   ][sn                      |ca            ] Vector Embedding
-[de                                            ][ve                       ]
-[                                              ][                         ]
-[                                              ][                         ]
+[de                                            ][ve                               ]
+[                                              ][                                 ]
+[                                              ][                                 ]
 }
 END
 END
@@ -45,8 +45,6 @@ GRID
 {
 Search in local SQL database:
 [qry                                                    ]
-[                                                       ]
-[                                                       ]
 [csv                                                    ]
 [qrv                                                    ]
 [                                                       ]
@@ -62,10 +60,13 @@ Context message for LLM:
 [                                                       ]
 [                                                       ]
 User question for LLM:
-[upr                                                    ]
+[uq1                                                    ]
+[q1                                                     ]
+Response:
+[rs1                                                    ]
 [                                                       ]
 [                                                       ]
-[qai                                                    ]
+[                                                       ]
 }
 END
 END
@@ -74,21 +75,10 @@ PAGE p3 (TEXT="Direct answer")
 GRID
 {
 User question for LLM:
- *** TODO ***
-}
-END
-END
-
-PAGE p4 (TEXT="Response")
-GRID
-{
+[uq2                                                    ]
+[q2                                                     ]
 Response:
-[res                                                    ]
-[                                                       ]
-[                                                       ]
-[                                                       ]
-[                                                       ]
-[                                                       ]
+[rs2                                                    ]
 [                                                       ]
 [                                                       ]
 [                                                       ]
@@ -151,11 +141,17 @@ BUTTON fma: find_match, TEXT="Find matching rows in local DB", IMAGE="fa-databas
 TEXTEDIT qrv = FORMONLY.search_vector, COLOR=RED, STRETCH=BOTH;
 TEXTEDIT amg = FORMONLY.context_data, STRETCH=BOTH;
 
-TEXTEDIT upr = FORMONLY.user_question, STRETCH=BOTH,
+TEXTEDIT uq1 = FORMONLY.user_question_1, STRETCH=BOTH,
   PLACEHOLDER="Enter a user prompt for the LLM here";
-BUTTON qai: ask_llm, TEXT="Send user question to LLM", IMAGE="fa-send",
+BUTTON q1: ask_llm_1, TEXT="Send user question to LLM", IMAGE="fa-send",
   COMMENT="Send request to LLM";
-TEXTEDIT res = FORMONLY.llm_response, STRETCH=BOTH;
+TEXTEDIT rs1 = FORMONLY.llm_response_1, STRETCH=BOTH;
+
+TEXTEDIT uq2 = FORMONLY.user_question_2, STRETCH=BOTH,
+  PLACEHOLDER="Enter a user prompt for the LLM here";
+BUTTON q2: ask_llm_2, TEXT="Send user question to LLM", IMAGE="fa-send",
+  COMMENT="Send request to LLM";
+TEXTEDIT rs2 = FORMONLY.llm_response_2, STRETCH=BOTH;
 
 END
 
