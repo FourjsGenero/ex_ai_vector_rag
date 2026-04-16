@@ -623,19 +623,19 @@ FUNCTION send_question_to_ai(
     WHEN c_ai_provider_openai
         CALL oai_client.set_defaults("gpt-4o")
         CALL oai_request.set_defaults(oai_client)
-        LET oai_request.temperature = 1.2
+        LET oai_request.temperature = 0.2
     WHEN c_ai_provider_mistral
         CALL mis_client.set_defaults("mistral-large-latest")
         CALL mis_request.set_defaults(mis_client)
-        LET mis_request.temperature = 1.2
+        LET mis_request.temperature = 0.2
     WHEN c_ai_provider_anthropic
         CALL ant_client.set_defaults("claude-haiku-4-5")
         CALL ant_request.set_defaults(ant_client)
-        LET ant_request.temperature = 0.8
+        LET ant_request.temperature = 0.2
     WHEN c_ai_provider_gemini
         CALL gem_client.set_defaults("gemini-3-flash-preview")
         CALL gem_request.set_defaults(gem_client)
-        LET gem_request.generationConfig.temperature = 1.2
+        LET gem_request.generationConfig.temperature = 0.2
     OTHERWISE
         DISPLAY "Invalid AI provider"
         EXIT PROGRAM 1
