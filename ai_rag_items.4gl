@@ -255,11 +255,19 @@ MAIN
 
         ON ACTION ask_llm_1
            LET llm_response_1 =
-               send_question_to_ai_1(params.ai_provider, system_message, context_data, user_question_1)
+               send_question_to_ai_1(params.ai_provider,
+                                     system_message,
+                                     context_data,
+                                     user_question_1)
 
         ON ACTION ask_llm_2
            LET llm_response_2 =
-               NULL --send_question_to_ai_2(params.ai_provider, system_message, user_question_1)
+               send_question_to_ai_2(params.ai_provider,
+                                     system_message,
+                                     params.max_cosine_similarity,
+                                     params.vector_dimension,
+                                     user_question_2,
+                                     item_list, item_list_attr)
 
         ON ACTION close
            EXIT DIALOG
@@ -618,7 +626,7 @@ FUNCTION send_question_to_ai_1(
     ai_provider STRING,
     system_message STRING,
     context_data STRING,
-    question STRING
+    user_question STRING
 ) RETURNS STRING
 
     DEFINE result STRING
@@ -683,19 +691,19 @@ FUNCTION send_question_to_ai_1(
     END IF
     CASE ai_provider
     WHEN c_ai_provider_openai
-        LET x = oai_request.append_user_input(question)
+        LET x = oai_request.append_user_input(user_question)
         LET s = oai_client.create_response(oai_request,oai_response)
         LET result = oai_response.get_output_message_content_text(1,1)
     WHEN c_ai_provider_mistral
-        LET x = mis_request.append_user_message(question)
+        LET x = mis_request.append_user_message(user_question)
         LET s = mis_client.create_chat_completion(mis_request,mis_response)
         LET result = mis_response.get_content_text(1)
     WHEN c_ai_provider_anthropic
-        LET x = ant_request.append_user_message(question)
+        LET x = ant_request.append_user_message(user_question)
         LET s = ant_client.create_message(ant_request,ant_response)
         LET result = ant_response.get_content_text(1)
     WHEN c_ai_provider_gemini
-        LET x = gem_request.append_user_content(question)
+        LET x = gem_request.append_user_content(user_question)
         LET s = gem_client.create_response(gem_request,gem_response)
         LET result = gem_response.get_content_text(1)
     END CASE
@@ -707,6 +715,49 @@ FUNCTION send_question_to_ai_1(
     MESSAGE ""
 
     RETURN result
+
+END FUNCTION
+
+# Same as send_question_to_ai_1, but we compute the search vector and find
+# matching rows directly from the user question...
+FUNCTION send_question_to_ai_2(
+    ai_provider STRING,
+    system_message STRING,
+    max_cosine_similarity FLOAT,
+    vector_dimension INTEGER,
+    user_question STRING,
+    item_list DYNAMIC ARRAY OF t_item,
+    item_list_attr DYNAMIC ARRAY OF t_item_attr
+) RETURNS STRING
+
+    DEFINE search_vector STRING
+    DEFINE x INTEGER
+    DEFINE context_items DYNAMIC ARRAY OF t_item
+    DEFINE context_data STRING
+
+    LET search_vector = compute_search_vector(ai_provider,
+                                              vector_dimension,
+                                              user_question)
+    IF search_vector IS NULL THEN
+       RETURN "More context is required..."
+    END IF
+
+    LET x = find_matching_items(max_cosine_similarity,
+                                search_vector,
+                                vector_dimension,
+                                context_items)
+    IF x <= 0 THEN
+       RETURN "More context is required..."
+    END IF
+
+    LET context_data = build_context_data(context_items)
+    CALL fill_item_list_attrs(item_list,context_items,item_list_attr)
+    MESSAGE SFMT("Found %1 matching items in database!",x)
+
+    RETURN send_question_to_ai_1(ai_provider,
+                                 system_message,
+                                 context_data,
+                                 user_question)
 
 END FUNCTION
 
