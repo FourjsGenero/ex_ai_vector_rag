@@ -35,12 +35,20 @@ PRIVATE CONSTANT c_ai_provider_anthropic = "anthropic"
 PRIVATE CONSTANT c_ai_provider_mistral = "mistral"
 PRIVATE CONSTANT c_ai_provider_openai  = "openai"
 
+TYPE t_parameters RECORD
+  ai_provider STRING,
+  ai_model STRING,
+  data_file STRING,
+  dbsource STRING,
+  dbuser STRING,
+  dbpswd STRING
+END RECORD
+
 MAIN
-    DEFINE ai_provider STRING
-    DEFINE ai_model STRING
-    DEFINE data_file STRING
+    DEFINE params t_parameters
+    DEFINE params_file TEXT
+    DEFINE dbserver STRING
     DEFINE x, s INTEGER
-    DEFINE dbsource, dbuser, dbpswd, dbserver STRING
     DEFINE item_list DYNAMIC ARRAY OF t_item
     DEFINE item_list_attr DYNAMIC ARRAY OF t_item_attr
     DEFINE search_context STRING = "Sport articles"
@@ -62,18 +70,33 @@ MAIN
     OPEN FORM f1 FROM "ai_rag_items"
     DISPLAY FORM f1
 
-    LET x = 0
-    LET ai_provider = NVL(arg_val(x:=x+1),"anthropic")
-    LET ai_model = NVL(arg_val(x:=x+1),"clause-opus-4-6")
-    LET data_file = NVL(arg_val(x:=x+1),"items_1.json")
-    LET dbsource = NVL(arg_val(x:=x+1),"test1+driver='dbmpgs_9'")
-    LET dbuser =  NVL(arg_val(x:=x+1),"pgsuser")
-    LET dbpswd =  NVL(arg_val(x:=x+1),"fourjs")
+    LOCATE params_file IN FILE "params.json"
 
-    IF dbuser IS NULL THEN
-        CONNECT TO dbsource USER dbuser USING dbpswd
+    IF num_args()>0 THEN
+       LET x = 0
+       LET params.ai_provider = NVL(arg_val(x:=x+1),"anthropic")
+       LET params.ai_model = NVL(arg_val(x:=x+1),"clause-opus-4-6")
+       LET params.data_file = NVL(arg_val(x:=x+1),"items_1.json")
+       LET params.dbsource = NVL(arg_val(x:=x+1),"test1+driver='dbmpgs_9'")
+       LET params.dbuser =  NVL(arg_val(x:=x+1),"pgsuser")
+       LET params.dbpswd =  NVL(arg_val(x:=x+1),"fourjs")
     ELSE
-        CONNECT TO dbsource USER dbuser USING dbpswd
+       IF params_file.getLength()>0 THEN
+          CALL util.JSON.parse(params_file,params)
+       ELSE
+          LET params.ai_provider = "anthropic"
+          LET params.ai_model = "clause-opus-4-6"
+          LET params.data_file = "items_1.json"
+          LET params.dbsource = "test1+driver='dbmpgs_9'"
+          LET params.dbuser = "pgsuser"
+          LET params.dbpswd = "fourjs"
+       END IF
+    END IF
+
+    IF params.dbuser IS NULL THEN
+        CONNECT TO params.dbsource
+    ELSE
+        CONNECT TO params.dbsource USER params.dbuser USING params.dbpswd
     END IF
     LET dbserver = fgl_db_driver_type()
 
@@ -93,8 +116,8 @@ MAIN
         DISPLAY ARRAY item_list TO sr_item_list.*
         END DISPLAY
 
-        INPUT BY NAME dbserver, dbsource,
-                      ai_provider, ai_model, vector_dimension,
+        INPUT BY NAME dbserver, params.dbsource,
+                      params.ai_provider, params.ai_model, vector_dimension,
                       system_message,
                       search_context, max_cosine_similarity, search_vector,
                       context_data, user_question,
@@ -102,7 +125,7 @@ MAIN
             ATTRIBUTES(WITHOUT DEFAULTS)
 
             ON CHANGE ai_provider
-               LET ai_model = _default_model(ai_provider)
+               LET params.ai_model = _default_model(params.ai_provider)
                LET search_vector = NULL
                UPDATE smitems SET emb = NULL
                LET s = fill_item_list(item_list)
@@ -114,7 +137,7 @@ MAIN
            CALL DIALOG.setArrayAttributes("sr_item_list",item_list_attr)
 
         ON ACTION init_sql_table
-           CALL init_sql_table(data_file)
+           CALL init_sql_table(params.data_file)
            CALL item_list.clear()
            CALL item_list_attr.clear()
            LET context_data = NULL
@@ -128,7 +151,7 @@ MAIN
            LET llm_response = NULL
 
         ON ACTION compute_vector_embeddings
-           CALL compute_vector_embeddings(ai_provider)
+           CALL compute_vector_embeddings(params.ai_provider)
            LET s = fill_item_list(item_list)
            CALL item_list_attr.clear()
            LET context_data = NULL
@@ -137,7 +160,7 @@ MAIN
         ON ACTION search_vector
            LET context_data = NULL
            LET llm_response = NULL
-           LET search_vector = compute_search_vector(ai_provider,search_context)
+           LET search_vector = compute_search_vector(params.ai_provider,search_context)
            IF search_vector IS NULL THEN
                CALL _mbox_ok("Could not compute search vector.")
            END IF
@@ -160,12 +183,14 @@ MAIN
 
         ON ACTION ask_llm
            LET llm_response =
-               send_question_to_ai(ai_provider, system_message, context_data, user_question)
+               send_question_to_ai(params.ai_provider, system_message, context_data, user_question)
 
         ON ACTION close
            EXIT DIALOG
 
     END DIALOG
+
+    LET params_file = util.JSON.format(util.JSON.stringify(params))
 
     CALL aim_anthropic.cleanup()
     CALL aim_openai.cleanup()

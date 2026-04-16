@@ -107,11 +107,10 @@ After compilation, run the main program to start the demo:
 $ export ANTHROPIC_API_KEY="sk-ant-..."
 $ export VOYAGE_API_KEY="pa-b..."
 
-$ fglrun ai_rag_quotes.42m "anthropic" "clause-opus-4-6" "mydbsrc" myuser mypswd
+$ fglrun ai_rag_quotes.42m "anthropic" "clause-opus-4-6" "items_1.json" "mydbsrc" myuser mypswd
 ```
 
 ## TODO:
-- Save current settings (provider, model, data file) to env file.
 - Use structured system prompt with:
   -- `<role>...</role>`
   -- `<task>...</task>`
