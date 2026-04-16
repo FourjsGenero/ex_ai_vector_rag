@@ -730,6 +730,7 @@ FUNCTION send_question_to_ai_2(
     item_list_attr DYNAMIC ARRAY OF t_item_attr
 ) RETURNS STRING
 
+    DEFINE response STRING
     DEFINE search_vector STRING
     DEFINE x INTEGER
     DEFINE context_items DYNAMIC ARRAY OF t_item
@@ -739,7 +740,7 @@ FUNCTION send_question_to_ai_2(
                                               vector_dimension,
                                               user_question)
     IF search_vector IS NULL THEN
-       RETURN "More context is required..."
+       RETURN "More context is required: Generated vector is NULL"
     END IF
 
     LET x = find_matching_items(max_cosine_similarity,
@@ -747,17 +748,23 @@ FUNCTION send_question_to_ai_2(
                                 vector_dimension,
                                 context_items)
     IF x <= 0 THEN
-       RETURN "More context is required..."
+       RETURN "More context is required: No rows found in database"
     END IF
 
     LET context_data = build_context_data(context_items)
     CALL fill_item_list_attrs(item_list,context_items,item_list_attr)
     MESSAGE SFMT("Found %1 matching items in database!",x)
 
-    RETURN send_question_to_ai_1(ai_provider,
-                                 system_message,
-                                 context_data,
-                                 user_question)
+    LET response = send_question_to_ai_1(ai_provider,
+                                         system_message,
+                                         context_data,
+                                         user_question)
+    IF response MATCHES "I need more*" THEN
+       LET response = response, "\n\n",
+           "Context data:\n", context_data
+    END IF
+
+    RETURN response
 
 END FUNCTION
 
