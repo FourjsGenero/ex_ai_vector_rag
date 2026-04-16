@@ -6,9 +6,6 @@ IMPORT FGL aim_gemini
 IMPORT FGL aim_mistral
 IMPORT FGL aim_vectors
 
---CONSTANT c_vector_dimension INTEGER = 512
-CONSTANT c_vector_dimension INTEGER = 1024
-
 TYPE t_item RECORD
        pkey INT,
        short_name STRING,
@@ -41,7 +38,9 @@ TYPE t_parameters RECORD
   data_file STRING,
   dbsource STRING,
   dbuser STRING,
-  dbpswd STRING
+  dbpswd STRING,
+  max_cosine_similarity FLOAT,
+  vector_dimension INTEGER
 END RECORD
 
 CONSTANT c_system_message STRING =
@@ -67,7 +66,6 @@ MAIN
     DEFINE item_list DYNAMIC ARRAY OF t_item
     DEFINE item_list_attr DYNAMIC ARRAY OF t_item_attr
     DEFINE search_context STRING = "Sport articles"
-    DEFINE max_cosine_similarity FLOAT = 0.45
     DEFINE search_vector STRING
     DEFINE context_data STRING
     DEFINE system_message STRING = c_system_message
@@ -76,22 +74,13 @@ MAIN
          = "I am a tennis player, what do you suggest me?"
          #= "Can I find running shoes here?"
     DEFINE llm_response STRING
-    DEFINE vector_dimension INTEGER
 
     OPEN FORM f1 FROM "ai_rag_items"
     DISPLAY FORM f1
 
     LOCATE params_file IN FILE "params.json"
 
-    IF num_args()>0 THEN
-       LET x = 0
-       LET params.ai_provider = NVL(arg_val(x:=x+1),"anthropic")
-       LET params.ai_model = NVL(arg_val(x:=x+1),"clause-opus-4-6")
-       LET params.data_file = NVL(arg_val(x:=x+1),"items_1.json")
-       LET params.dbsource = NVL(arg_val(x:=x+1),"test1+driver='dbmpgs_9'")
-       LET params.dbuser =  NVL(arg_val(x:=x+1),"pgsuser")
-       LET params.dbpswd =  NVL(arg_val(x:=x+1),"fourjs")
-    ELSE
+    IF num_args()==0 THEN
        IF params_file.getLength()>0 THEN
           CALL util.JSON.parse(params_file,params)
        ELSE
@@ -102,6 +91,24 @@ MAIN
           LET params.dbuser = "pgsuser"
           LET params.dbpswd = "fourjs"
        END IF
+    ELSE
+       LET x = 0
+       IF num_args()>=3 THEN
+          LET params.ai_provider = arg_val(x:=x+1)
+          LET params.ai_model = arg_val(x:=x+1)
+          LET params.data_file = arg_val(x:=x+1)
+       END IF
+       IF num_args()>3 THEN
+          LET params.dbsource = arg_val(x:=x+1)
+          LET params.dbuser = arg_val(x:=x+1)
+          LET params.dbpswd = arg_val(x:=x+1)
+       END IF
+    END IF
+    IF params.max_cosine_similarity IS NULL THEN
+       LET params.max_cosine_similarity = 0.45
+    END IF
+    IF params.vector_dimension IS NULL THEN
+       LET params.vector_dimension = 1024
     END IF
 
     IF params.dbuser IS NULL THEN
@@ -118,9 +125,7 @@ MAIN
 
     CALL aim_vectors.initialize()
 
-    LET vector_dimension = c_vector_dimension
-
-    LET s = fill_item_list(item_list)
+    LET s = fill_item_list(item_list,params.vector_dimension)
 
     DIALOG ATTRIBUTES(UNBUFFERED)
 
@@ -128,10 +133,14 @@ MAIN
         END DISPLAY
 
         INPUT BY NAME dbserver, params.dbsource,
-                      params.ai_provider, params.ai_model, vector_dimension,
+                      params.ai_provider, params.ai_model,
+                      params.vector_dimension,
                       system_message,
-                      search_context, max_cosine_similarity, search_vector,
-                      context_data, user_question,
+                      search_context,
+                      params.max_cosine_similarity,
+                      search_vector,
+                      context_data,
+                      user_question,
                       llm_response
             ATTRIBUTES(WITHOUT DEFAULTS)
 
@@ -139,7 +148,7 @@ MAIN
                LET params.ai_model = _default_model(params.ai_provider)
                LET search_vector = NULL
                UPDATE smitems SET emb = NULL
-               LET s = fill_item_list(item_list)
+               LET s = fill_item_list(item_list,params.vector_dimension)
                CALL item_list_attr.clear()
 
         END INPUT
@@ -148,7 +157,7 @@ MAIN
            CALL DIALOG.setArrayAttributes("sr_item_list",item_list_attr)
 
         ON ACTION init_sql_table
-           CALL init_sql_table(params.data_file)
+           CALL init_sql_table(params.data_file,params.vector_dimension)
            CALL item_list.clear()
            CALL item_list_attr.clear()
            LET context_data = NULL
@@ -156,14 +165,14 @@ MAIN
            MESSAGE "SQL Table initialized, ready to be filled with data"
 
         ON ACTION fill_item_list
-           LET s = fill_item_list(item_list)
+           LET s = fill_item_list(item_list,params.vector_dimension)
            CALL item_list_attr.clear()
            LET context_data = NULL
            LET llm_response = NULL
 
         ON ACTION compute_vector_embeddings
-           CALL compute_vector_embeddings(params.ai_provider)
-           LET s = fill_item_list(item_list)
+           CALL compute_vector_embeddings(params.ai_provider,params.vector_dimension)
+           LET s = fill_item_list(item_list,params.vector_dimension)
            CALL item_list_attr.clear()
            LET context_data = NULL
            LET llm_response = NULL
@@ -171,7 +180,9 @@ MAIN
         ON ACTION search_vector
            LET context_data = NULL
            LET llm_response = NULL
-           LET search_vector = compute_search_vector(params.ai_provider,search_context)
+           LET search_vector = compute_search_vector(params.ai_provider,
+                                                     params.vector_dimension,
+                                                     search_context)
            IF search_vector IS NULL THEN
                CALL _mbox_ok("Could not compute search vector.")
            END IF
@@ -182,7 +193,9 @@ MAIN
                CALL _mbox_ok("First you need to compute the search vector from context sentence.")
                CONTINUE DIALOG
            END IF
-           LET x = find_matching_items(max_cosine_similarity,search_vector,context_items)
+           LET x = find_matching_items(params.max_cosine_similarity,
+                                       search_vector, params.vector_dimension,
+                                       context_items)
            IF x == 0 THEN
                LET context_data = NULL
                CALL _mbox_ok("No matching items found in database!\nIncrease MAX cosine similarity.")
@@ -247,7 +260,10 @@ FUNCTION _default_model(ai_provider STRING) RETURNS STRING
     END IF
 END FUNCTION
 
-FUNCTION init_sql_table(data_file STRING) RETURNS ()
+FUNCTION init_sql_table(
+    data_file STRING,
+    vector_dimension INTEGER
+) RETURNS ()
 
     DEFINE x INTEGER
     DEFINE sqlcmd STRING
@@ -265,7 +281,7 @@ FUNCTION init_sql_table(data_file STRING) RETURNS ()
                   || " short_name VARCHAR(50),"
                   || " category VARCHAR(50),"
                   || " description VARCHAR(500),"
-                  || SFMT(" emb %1", _vector_sql_data_type(c_vector_dimension) )
+                  || SFMT(" emb %1", _vector_sql_data_type(vector_dimension) )
                   || ")"
 --display "SQL: ", sqlcmd
     EXECUTE IMMEDIATE sqlcmd
@@ -281,7 +297,8 @@ END FUNCTION
 
 -- Table may not yet exist.
 FUNCTION fill_item_list(
-    arr DYNAMIC ARRAY OF t_item
+    arr DYNAMIC ARRAY OF t_item,
+    vector_dimension INTEGER
 ) RETURNS INTEGER
     DEFINE x INTEGER
     DEFINE sqlcmd STRING
@@ -293,7 +310,7 @@ FUNCTION fill_item_list(
     END TRY
 
     LET sqlcmd = "SELECT pkey, short_name, category, description"
-                  || SFMT(", %1", _vector_sql_fetch_expr("emb",c_vector_dimension))
+                  || SFMT(", %1", _vector_sql_fetch_expr("emb",vector_dimension))
                   || " FROM smitems ORDER BY pkey"
 --display "SQL:", sqlcmd
     DECLARE c_fill_list CURSOR FROM sqlcmd
@@ -335,6 +352,7 @@ END FUNCTION
 FUNCTION _init_vector_embedding_request(
     ai_provider STRING,
     --ai_emb_model STRING,
+    vector_dimension INTEGER,
     te_client aim_vectors.t_client INOUT,
     te_request aim_vectors.t_text_embedding_request INOUT
 ) RETURNS ()
@@ -344,13 +362,13 @@ FUNCTION _init_vector_embedding_request(
         CALL te_request.set_defaults(te_client,NULL)
     WHEN c_ai_provider_openai
         CALL te_client.set_defaults(ai_provider,"text-embedding-3-small")
-        CALL te_request.set_defaults(te_client,c_vector_dimension)
+        CALL te_request.set_defaults(te_client,vector_dimension)
     WHEN c_ai_provider_mistral
         CALL te_client.set_defaults(ai_provider,"mistral-embed")
         CALL te_request.set_defaults(te_client,NULL) -- dim is always 1024 with mistral
     WHEN c_ai_provider_gemini
         CALL te_client.set_defaults(ai_provider,"gemini-embedding-001")
-        CALL te_request.set_defaults(te_client,c_vector_dimension)
+        CALL te_request.set_defaults(te_client,vector_dimension)
     OTHERWISE
         DISPLAY "Unexpected AI provider: ", ai_provider
         EXIT PROGRAM 1
@@ -364,7 +382,8 @@ FUNCTION _build_context_data(
 END FUNCTION
 
 FUNCTION compute_vector_embeddings(
-    ai_provider STRING
+    ai_provider STRING,
+    vector_dimension INTEGER
 ) RETURNS ()
 
     DEFINE s, x, tt INTEGER
@@ -378,11 +397,11 @@ FUNCTION compute_vector_embeddings(
 
     LOCATE vector IN MEMORY
 
-    CALL _init_vector_embedding_request(ai_provider,te_client,te_request)
+    CALL _init_vector_embedding_request(ai_provider,vector_dimension,te_client,te_request)
 
     SELECT COUNT(*) INTO tt FROM smitems
 
-    LET sqlcmd = SFMT("UPDATE smitems SET emb = %1 WHERE pkey = ?", _vector_sql_placeholder(c_vector_dimension))
+    LET sqlcmd = SFMT("UPDATE smitems SET emb = %1 WHERE pkey = ?", _vector_sql_placeholder(vector_dimension))
 --display "SQL:", sqlcmd
     PREPARE stmt2 FROM sqlcmd
     DECLARE c_compute_vectors CURSOR FROM "SELECT pkey, short_name, category, description FROM smitems ORDER BY pkey"
@@ -407,6 +426,7 @@ END FUNCTION
 
 FUNCTION compute_search_vector(
     ai_provider STRING,
+    vector_dimension INTEGER,
     source STRING
 ) RETURNS STRING
 
@@ -416,7 +436,7 @@ FUNCTION compute_search_vector(
     DEFINE te_request aim_vectors.t_text_embedding_request
     DEFINE te_response aim_vectors.t_text_embedding_response
 
-    CALL _init_vector_embedding_request(ai_provider,te_client,te_request)
+    CALL _init_vector_embedding_request(ai_provider,vector_dimension,te_client,te_request)
 
     MESSAGE "Waiting for answer..."; CALL ui.Interface.refresh()
 
@@ -441,6 +461,7 @@ END FUNCTION
 FUNCTION find_matching_items(
     max_cosine_similarity FLOAT,
     search_vector STRING,
+    vector_dimension INTEGER,
     context_items DYNAMIC ARRAY OF t_context_item
 ) RETURNS INTEGER
 
@@ -455,9 +476,9 @@ FUNCTION find_matching_items(
 
     LET sqlcmd = SFMT("SELECT %1 cosim,",
                        _vector_sql_cosine_distance(
-                          c_vector_dimension,
+                          vector_dimension,
                           "emb",
-                          _vector_sql_placeholder(c_vector_dimension)
+                          _vector_sql_placeholder(vector_dimension)
                        )
                      ),
                      " pkey, short_name FROM smitems ORDER BY cosim"
@@ -477,36 +498,36 @@ display rec.pkey, "  cosine similarity: ", (cosim using "--&.&&&&&&&"), "  max: 
 
 END FUNCTION
 
-FUNCTION _vector_sql_data_type(dimension INTEGER) RETURNS STRING
+FUNCTION _vector_sql_data_type(vector_dimension INTEGER) RETURNS STRING
     CASE fgl_db_driver_type()
-    WHEN "pgs" RETURN SFMT("VECTOR(%1)",dimension)
-    WHEN "ora" RETURN SFMT("VECTOR(%1,FLOAT32)",dimension)
-    WHEN "snc" RETURN SFMT("VECTOR(%1,FLOAT32)",dimension)
+    WHEN "pgs" RETURN SFMT("VECTOR(%1)",vector_dimension)
+    WHEN "ora" RETURN SFMT("VECTOR(%1,FLOAT32)",vector_dimension)
+    WHEN "snc" RETURN SFMT("VECTOR(%1,FLOAT32)",vector_dimension)
     OTHERWISE RETURN "?"
     END CASE
 END FUNCTION
 
-FUNCTION _vector_sql_cosine_distance(dimension INTEGER, op1 STRING, op2 STRING) RETURNS STRING
+FUNCTION _vector_sql_cosine_distance(vector_dimension INTEGER, op1 STRING, op2 STRING) RETURNS STRING
     CASE fgl_db_driver_type()
     WHEN "pgs" RETURN SFMT("((%1) <=> (%2))", op1, op2)
     WHEN "ora" RETURN SFMT("VECTOR_DISTANCE((%1), (%2), COSINE)", op1, op2)
     -- SQL Server bug? Must cast STRING/TEXT parameter to VECTOR!
-    WHEN "snc" RETURN SFMT("VECTOR_DISTANCE('cosine', (%1), CAST(%2 AS VECTOR(%3)) )", op1, op2, dimension)
+    WHEN "snc" RETURN SFMT("VECTOR_DISTANCE('cosine', (%1), CAST(%2 AS VECTOR(%3)) )", op1, op2, vector_dimension)
     OTHERWISE RETURN "?"
     END CASE
 END FUNCTION
 
-FUNCTION _vector_sql_placeholder(dimension INTEGER) RETURNS STRING
+FUNCTION _vector_sql_placeholder(vector_dimension INTEGER) RETURNS STRING
     CASE fgl_db_driver_type()
-    WHEN "pgs" RETURN SFMT("?::vector(%1)",dimension)
-    WHEN "ora" RETURN SFMT("VECTOR(?,%1,FLOAT32)",dimension)
+    WHEN "pgs" RETURN SFMT("?::vector(%1)",vector_dimension)
+    WHEN "ora" RETURN SFMT("VECTOR(?,%1,FLOAT32)",vector_dimension)
     WHEN "snc" RETURN "?"
     OTHERWISE  RETURN "?"
     END CASE
 END FUNCTION
 
-FUNCTION _vector_sql_fetch_expr(expr STRING, dimension INTEGER) RETURNS STRING
-    LET dimension = NULL
+FUNCTION _vector_sql_fetch_expr(expr STRING, vector_dimension INTEGER) RETURNS STRING
+    LET vector_dimension = NULL
     CASE fgl_db_driver_type()
     WHEN "pgs" RETURN SFMT("%1::text",expr)
     WHEN "ora" RETURN expr -- Must be fetched into TEXT !
