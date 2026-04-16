@@ -111,7 +111,20 @@ $ fglrun ai_rag_quotes.42m "anthropic" "clause-opus-4-6" "mydbsrc" myuser mypswd
 ```
 
 ## TODO:
-- Save current settings (provider, model) to env file.
+- Data file as command-line argument
+- Save current settings (provider, model, data file) to env file.
+- Use structured system prompt with:
+  -- `<role>...</role>`
+  -- `<task>...</task>`
+  -- `<instructions>...</instructions>`
+- Add second procedure, to get answer directly from user question without intermediate
+vector generation. Ask LLM to:
+  1) Extract concepts from user question (there can be several concepts!)
+  2) For each concept, call a tool to fetch items matching the concepts:
+    -- `get_matching_items(concept)` => json array of items
+  3) Generate the final answer using the matching items.
+  Or, use directly the user question to generate the search vector and find the
+  matching items? Not sure this works if concepts are mixed...
 - Detach text embedding model from LLM model.
 
 ## Bug fixes:
