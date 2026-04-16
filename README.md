@@ -133,12 +133,12 @@ $ fglrun ai_rag_quotes.42m "anthropic" "clause-opus-4-6" "items_1.json" "mydbsrc
   the matching items. If this is sufficient to find relevant items, it's a good
   solution.
   Othewise, try the following (needs system prompt instructions review and tool):
-  1) Ask LLM to extract concepts from user question (there can be several concepts!)
-  2) Provide a tool to return items descriptions from a concept:
-     -- `get_matching_items(concept)` => json array of items descriptions
-  3) For each concept found in the user query, ask LLM will callback the tool to
-     fetch items descriptions for the concept.
-  4) Let LLM generate the final answer using the matching items.
+  - Ask LLM to extract concepts from user question (there can be several concepts!)
+  - Provide a tool to return items descriptions from a concept:
+      `get_matching_items(concept)` => json array of items descriptions
+  - For each concept found in the user query, ask LLM will callback the tool to
+    fetch items descriptions for the concept.
+  - Let LLM generate the final answer using the matching items.
 
 - Detach text embedding model from LLM model.
 
