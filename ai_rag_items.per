@@ -8,7 +8,7 @@ GRID
 {
 SQL DB server/source:[dbs                    ][src                         ]
 AI provider/model:   [pro            ][mod             ]
-Vector dim:          [dim    ]               Max cosine similarity: [csm   ]
+Vector dim:          [dim    ]  Max cosine dist: [csm ]  Temperature: [tmp ]
 [b1                    ][b2                     ][b3                       ]
 }
 END
@@ -113,8 +113,10 @@ COMBOBOX pro = FORMONLY.ai_provider, NOT NULL,
 EDIT mod = FORMONLY.ai_model, STRETCH=X, SCROLL;
 COMBOBOX dim = FORMONLY.vector_dimension, NOT NULL,
   ITEMS = (128, 384, 768, 1024, 1536);
-EDIT csm = FORMONLY.max_cosine_similarity, NOT NULL,
+EDIT csm = FORMONLY.max_cosine_distance, NOT NULL,
   COMMENT="Max cosine distance must be adapted to the chosen embedding model";
+EDIT tmp = FORMONLY.temperature, NOT NULL,
+  COMMENT="Closer to zero = more deterministic";
 
 BUTTON b1: init_sql_table,
    TEXT="1. Init SQL table";

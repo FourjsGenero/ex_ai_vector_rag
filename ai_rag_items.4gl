@@ -34,8 +34,9 @@ TYPE t_parameters RECORD
   dbsource STRING,
   dbuser STRING,
   dbpswd STRING,
-  max_cosine_similarity FLOAT,
-  vector_dimension INTEGER
+  max_cosine_distance FLOAT,
+  vector_dimension INTEGER,
+  temperature FLOAT
 END RECORD
 
 CONSTANT c_system_message STRING =
@@ -97,6 +98,8 @@ MAIN
 
     CALL ui.Interface.loadStyles("styles.4st")
 
+    OPTIONS INPUT WRAP, FIELD ORDER FORM
+
     OPEN FORM f1 FROM "ai_rag_items"
     DISPLAY FORM f1
 
@@ -126,11 +129,14 @@ MAIN
           LET params.dbpswd = arg_val(x:=x+1)
        END IF
     END IF
-    IF params.max_cosine_similarity IS NULL THEN
-       LET params.max_cosine_similarity = 0.45
+    IF params.max_cosine_distance IS NULL THEN
+       LET params.max_cosine_distance = 0.45
     END IF
     IF params.vector_dimension IS NULL THEN
        LET params.vector_dimension = 1024
+    END IF
+    IF params.temperature IS NULL THEN
+       LET params.temperature = 0.2
     END IF
 
     IF params.dbuser IS NULL THEN
@@ -157,9 +163,10 @@ MAIN
         INPUT BY NAME dbserver, params.dbsource,
                       params.ai_provider, params.ai_model,
                       params.vector_dimension,
+                      params.max_cosine_distance,
+                      params.temperature,
                       system_message,
                       search_context,
-                      params.max_cosine_similarity,
                       search_vector,
                       context_data,
                       user_question_1, llm_response_1,
@@ -177,7 +184,7 @@ MAIN
                END IF
                LET prev_ai_provider = params.ai_provider
                LET params.ai_model = _default_model(params.ai_provider)
-               LET params.max_cosine_similarity = _best_max_cosine_distance(params.ai_provider)
+               LET params.max_cosine_distance = _best_max_cosine_distance(params.ai_provider)
                LET search_vector = NULL
                UPDATE smitems SET emb = NULL
                LET s = fill_item_list(item_list,params.vector_dimension)
@@ -241,12 +248,12 @@ MAIN
                CALL _mbox_ok("First you need to compute the search vector from context sentence.")
                CONTINUE DIALOG
            END IF
-           LET x = find_matching_items(params.max_cosine_similarity,
+           LET x = find_matching_items(params.max_cosine_distance,
                                        search_vector, params.vector_dimension,
                                        context_items)
            IF x == 0 THEN
                LET context_data = NULL
-               CALL _mbox_ok("No matching items found in database!\nIncrease MAX cosine similarity.")
+               CALL _mbox_ok("No matching items found in database!\nIncrease MAX cosine distance.")
            ELSE
                LET context_data = build_context_data(context_items)
                CALL fill_item_list_attrs(item_list,context_items,item_list_attr)
@@ -256,6 +263,7 @@ MAIN
         ON ACTION ask_llm_1
            LET llm_response_1 =
                send_question_to_ai_1(params.ai_provider,
+                                     params.temperature,
                                      system_message,
                                      context_data,
                                      user_question_1)
@@ -263,8 +271,9 @@ MAIN
         ON ACTION ask_llm_2
            LET llm_response_2 =
                send_question_to_ai_2(params.ai_provider,
+                                     params.temperature,
                                      system_message,
-                                     params.max_cosine_similarity,
+                                     params.max_cosine_distance,
                                      params.vector_dimension,
                                      user_question_2,
                                      item_list, item_list_attr)
@@ -535,7 +544,7 @@ FUNCTION compute_search_vector(
 END FUNCTION
 
 FUNCTION find_matching_items(
-    max_cosine_similarity FLOAT,
+    max_cosine_distance FLOAT,
     search_vector STRING,
     vector_dimension INTEGER,
     context_items DYNAMIC ARRAY OF t_item
@@ -563,8 +572,8 @@ display "SQL: ", sqlcmd
     LET x = 0
     CALL context_items.clear()
     FOREACH c_fetch_related USING vector INTO cosim, rec.*
-display rec.pkey, "  cosine similarity: ", (cosim using "--&.&&&&&&&"), "  max: ", max_cosine_similarity
-        IF cosim > max_cosine_similarity THEN EXIT FOREACH END IF
+display rec.pkey, "  cosine distance: ", (cosim using "--&.&&&&&&&"), "  max: ", max_cosine_distance
+        IF cosim > max_cosine_distance THEN EXIT FOREACH END IF
         LET x = x+1
         LET context_items[x] = rec
     END FOREACH
@@ -624,6 +633,7 @@ END FUNCTION
 
 FUNCTION send_question_to_ai_1(
     ai_provider STRING,
+    temperature FLOAT,
     system_message STRING,
     context_data STRING,
     user_question STRING
@@ -655,19 +665,19 @@ FUNCTION send_question_to_ai_1(
     WHEN c_ai_provider_openai
         CALL oai_client.set_defaults("gpt-4o")
         CALL oai_request.set_defaults(oai_client)
-        LET oai_request.temperature = 0.2
+        LET oai_request.temperature = temperature
     WHEN c_ai_provider_mistral
         CALL mis_client.set_defaults("mistral-large-latest")
         CALL mis_request.set_defaults(mis_client)
-        LET mis_request.temperature = 0.2
+        LET mis_request.temperature = temperature
     WHEN c_ai_provider_anthropic
         CALL ant_client.set_defaults("claude-haiku-4-5")
         CALL ant_request.set_defaults(ant_client)
-        LET ant_request.temperature = 0.2
+        LET ant_request.temperature = temperature
     WHEN c_ai_provider_gemini
         CALL gem_client.set_defaults("gemini-3-flash-preview")
         CALL gem_request.set_defaults(gem_client)
-        LET gem_request.generationConfig.temperature = 0.2
+        LET gem_request.generationConfig.temperature = temperature
     OTHERWISE
         DISPLAY "Invalid AI provider"
         EXIT PROGRAM 1
@@ -722,8 +732,9 @@ END FUNCTION
 # matching rows directly from the user question...
 FUNCTION send_question_to_ai_2(
     ai_provider STRING,
+    temperature FLOAT,
     system_message STRING,
-    max_cosine_similarity FLOAT,
+    max_cosine_distance FLOAT,
     vector_dimension INTEGER,
     user_question STRING,
     item_list DYNAMIC ARRAY OF t_item,
@@ -736,6 +747,9 @@ FUNCTION send_question_to_ai_2(
     DEFINE context_items DYNAMIC ARRAY OF t_item
     DEFINE context_data STRING
 
+    DISPLAY "User question:\n", user_question
+    DISPLAY "Max cosine distance:\n", max_cosine_distance
+
     LET search_vector = compute_search_vector(ai_provider,
                                               vector_dimension,
                                               user_question)
@@ -743,19 +757,22 @@ FUNCTION send_question_to_ai_2(
        RETURN "More context is required: Generated vector is NULL"
     END IF
 
-    LET x = find_matching_items(max_cosine_similarity,
+    LET x = find_matching_items(max_cosine_distance,
                                 search_vector,
                                 vector_dimension,
                                 context_items)
     IF x <= 0 THEN
        RETURN "More context is required: No rows found in database"
     END IF
+    DISPLAY "Number of items found: ", x
 
     LET context_data = build_context_data(context_items)
+    DISPLAY "Context data:\n", context_data
     CALL fill_item_list_attrs(item_list,context_items,item_list_attr)
     MESSAGE SFMT("Found %1 matching items in database!",x)
 
     LET response = send_question_to_ai_1(ai_provider,
+                                         temperature,
                                          system_message,
                                          context_data,
                                          user_question)
