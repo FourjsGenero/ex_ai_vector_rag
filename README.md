@@ -128,14 +128,17 @@ $ fglrun ai_rag_quotes.42m "anthropic" "clause-opus-4-6" "items_1.json" "mydbsrc
 
 ## TODO:
 
-- Add second procedure, to get answer directly from user question without intermediate
-vector generation. Ask LLM to:
-  1) Extract concepts from user question (there can be several concepts!)
-  2) For each concept, call a tool to fetch items matching the concepts:
-    -- `get_matching_items(concept)` => json array of items
-  3) Generate the final answer using the matching items.
-  Or, use directly the user question to generate the search vector and find the
-  matching items? Not sure this works if concepts are mixed...
+- Direct query panel:
+  For now, we use directly the user question to generate the search vector and find
+  the matching items. If this is sufficient to find relevant items, it's a good
+  solution.
+  Othewise, try the following (needs system prompt instructions review and tool):
+  1) Ask LLM to extract concepts from user question (there can be several concepts!)
+  2) Provide a tool to return items descriptions from a concept:
+     -- `get_matching_items(concept)` => json array of items descriptions
+  3) For each concept found in the user query, ask LLM will callback the tool to
+     fetch items descriptions for the concept.
+  4) Let LLM generate the final answer using the matching items.
 
 - Detach text embedding model from LLM model.
 
