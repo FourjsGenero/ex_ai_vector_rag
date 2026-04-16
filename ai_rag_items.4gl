@@ -44,6 +44,21 @@ TYPE t_parameters RECORD
   dbpswd STRING
 END RECORD
 
+CONSTANT c_system_message STRING =
+`<role>
+You are a nice and friendly supermarket assistant.
+</role>
+<task>
+You can answer customer questions about available items.
+</task>
+<instruction>
+Focus on item descriptions provided within <items> and </items> XML markers.
+Always mention the item short names in your answer.
+If the provided items do not match the user question, just respond:
+  "I need more information to help you."
+</instruction>
+`
+
 MAIN
     DEFINE params t_parameters
     DEFINE params_file TEXT
@@ -55,11 +70,7 @@ MAIN
     DEFINE max_cosine_similarity FLOAT = 0.45
     DEFINE search_vector STRING
     DEFINE context_data STRING
-    DEFINE system_message STRING = `You are a supermarket assistant.
- You can answer customer questions about available items.
- Focus on item descriptions provided between <items> XML markers.
- Always mention the item short names in your answer.
- If the provided items do not match the user question, just respond "I need more information to help you."`
+    DEFINE system_message STRING = c_system_message
     DEFINE context_items DYNAMIC ARRAY OF t_context_item
     DEFINE user_question STRING
          = "I am a tennis player, what do you suggest me?"
