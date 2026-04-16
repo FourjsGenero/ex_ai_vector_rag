@@ -167,12 +167,15 @@ MAIN
             BEFORE FIELD ai_provider
                LET prev_ai_provider = params.ai_provider
             ON CHANGE ai_provider
-               IF NOT _mbox_yn("Provider change implies vector re-calculation, proceed?") THEN
+               IF NOT _mbox_yn("Provider change implies vector re-calculation, proceed?")
+               OR NOT _mbox_yn("MAX cosine distance needs to be adapted to embedding model, proceed?")
+               THEN
                   LET params.ai_provider = prev_ai_provider
                   CONTINUE DIALOG
                END IF
                LET prev_ai_provider = params.ai_provider
                LET params.ai_model = _default_model(params.ai_provider)
+               LET params.max_cosine_similarity = _best_max_cosine_distance(params.ai_provider)
                LET search_vector = NULL
                UPDATE smitems SET emb = NULL
                LET s = fill_item_list(item_list,params.vector_dimension)
@@ -390,6 +393,21 @@ FUNCTION fill_item_list_attrs(
         END IF
     END FOR
 
+END FUNCTION
+
+FUNCTION _best_max_cosine_distance(ai_provider STRING) RETURNS FLOAT
+    CASE ai_provider
+    WHEN c_ai_provider_anthropic -- Must use VoyageAI for vector generation!
+        RETURN 0.5
+    WHEN c_ai_provider_openai
+        RETURN 0.6
+    WHEN c_ai_provider_mistral
+        RETURN 0.35
+    WHEN c_ai_provider_gemini
+        RETURN 0.5
+    OTHERWISE
+        RETURN NULL
+    END CASE
 END FUNCTION
 
 FUNCTION _init_vector_embedding_request(

@@ -7,7 +7,8 @@ VBOX
 GRID
 {
 SQL DB server/source:[dbs                    ][src                         ]
-AI provider/model:   [pro            ][mod             ]Vector dim:[dim    ]
+AI provider/model:   [pro            ][mod             ]
+Vector dim:          [dim    ]               Max cosine similarity: [csm   ]
 [b1                    ][b2                     ][b3                       ]
 }
 END
@@ -50,7 +51,7 @@ Search in local SQL database:
 [qrv                                                    ]
 [                                                       ]
 [                                                       ]
-Max cosine similarity:[csm   ][fma                      ]
+[fma                                                    ]
 Context message for LLM:
 [amg                                                    ]
 [                                                       ]
@@ -122,6 +123,8 @@ COMBOBOX pro = FORMONLY.ai_provider, NOT NULL,
 EDIT mod = FORMONLY.ai_model, STRETCH=X, SCROLL;
 COMBOBOX dim = FORMONLY.vector_dimension, NOT NULL,
   ITEMS = (128, 384, 768, 1024, 1536);
+EDIT csm = FORMONLY.max_cosine_similarity, NOT NULL,
+  COMMENT="Max cosine distance must be adapted to the chosen embedding model";
 
 BUTTON b1: init_sql_table,
    TEXT="1. Init SQL table";
@@ -141,8 +144,6 @@ TEXTEDIT smg = FORMONLY.system_message, STRETCH=BOTH,
 
 TEXTEDIT qry = FORMONLY.search_context, STRETCH=BOTH,
   PLACEHOLDER="Enter a search context for items here";
-EDIT csm = FORMONLY.max_cosine_similarity, NOT NULL,
-  COMMENT="Max cosine distance must be adapted to the chosen embedding model";
 BUTTON csv: search_vector, TEXT="Compute context vector", IMAGE="fa-cogs",
   COMMENT="Generate the vector from the search context";
 BUTTON fma: find_match, TEXT="Find matching rows in local DB", IMAGE="fa-database",
