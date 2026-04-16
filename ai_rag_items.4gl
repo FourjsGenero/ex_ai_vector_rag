@@ -38,6 +38,7 @@ PRIVATE CONSTANT c_ai_provider_openai  = "openai"
 MAIN
     DEFINE ai_provider STRING
     DEFINE ai_model STRING
+    DEFINE data_file STRING
     DEFINE x, s INTEGER
     DEFINE dbsource, dbuser, dbpswd, dbserver STRING
     DEFINE item_list DYNAMIC ARRAY OF t_item
@@ -61,11 +62,13 @@ MAIN
     OPEN FORM f1 FROM "ai_rag_items"
     DISPLAY FORM f1
 
-    LET ai_provider = NVL(arg_val(1),"anthropic")
-    LET ai_model = NVL(arg_val(2),"clause-opus-4-6")
-    LET dbsource = NVL(arg_val(3),"test1+driver='dbmpgs_9'")
-    LET dbuser =  NVL(arg_val(4),"pgsuser")
-    LET dbpswd =  NVL(arg_val(5),"fourjs")
+    LET x = 0
+    LET ai_provider = NVL(arg_val(x:=x+1),"anthropic")
+    LET ai_model = NVL(arg_val(x:=x+1),"clause-opus-4-6")
+    LET data_file = NVL(arg_val(x:=x+1),"items_1.json")
+    LET dbsource = NVL(arg_val(x:=x+1),"test1+driver='dbmpgs_9'")
+    LET dbuser =  NVL(arg_val(x:=x+1),"pgsuser")
+    LET dbpswd =  NVL(arg_val(x:=x+1),"fourjs")
 
     IF dbuser IS NULL THEN
         CONNECT TO dbsource USER dbuser USING dbpswd
@@ -111,7 +114,7 @@ MAIN
            CALL DIALOG.setArrayAttributes("sr_item_list",item_list_attr)
 
         ON ACTION init_sql_table
-           CALL init_sql_table()
+           CALL init_sql_table(data_file)
            CALL item_list.clear()
            CALL item_list_attr.clear()
            LET context_data = NULL
@@ -208,15 +211,15 @@ FUNCTION _default_model(ai_provider STRING) RETURNS STRING
     END IF
 END FUNCTION
 
-FUNCTION init_sql_table() RETURNS ()
+FUNCTION init_sql_table(data_file STRING) RETURNS ()
 
     DEFINE x INTEGER
     DEFINE sqlcmd STRING
     DEFINE arr DYNAMIC ARRAY OF t_item
-    DEFINE data_file TEXT
+    DEFINE data TEXT
 
-    LOCATE data_file IN FILE "items_1.json"
-    CALL util.JSON.parse(data_file,arr)
+    LOCATE data IN FILE data_file
+    CALL util.JSON.parse(data,arr)
 
     WHENEVER ERROR CONTINUE
     DROP TABLE smitems

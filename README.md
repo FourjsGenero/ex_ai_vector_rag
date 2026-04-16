@@ -111,7 +111,6 @@ $ fglrun ai_rag_quotes.42m "anthropic" "clause-opus-4-6" "mydbsrc" myuser mypswd
 ```
 
 ## TODO:
-- Data file as command-line argument
 - Save current settings (provider, model, data file) to env file.
 - Use structured system prompt with:
   -- `<role>...</role>`
