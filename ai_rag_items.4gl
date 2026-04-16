@@ -230,6 +230,9 @@ MAIN
         ON ACTION ask_llm
            LET llm_response =
                send_question_to_ai(params.ai_provider, system_message, context_data, user_question)
+           IF llm_response IS NOT NULL THEN
+               NEXT FIELD llm_response
+           END IF
 
         ON ACTION close
            EXIT DIALOG
