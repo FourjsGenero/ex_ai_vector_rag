@@ -107,6 +107,7 @@ $ fglrun ai_rag_quotes.42m "anthropic" "clause-opus-4-6" "items_1.json" "mydbsrc
 ```
 
 ## TODO:
+
 - Add second procedure, to get answer directly from user question without intermediate
 vector generation. Ask LLM to:
   1) Extract concepts from user question (there can be several concepts!)
@@ -115,6 +116,7 @@ vector generation. Ask LLM to:
   3) Generate the final answer using the matching items.
   Or, use directly the user question to generate the search vector and find the
   matching items? Not sure this works if concepts are mixed...
+
 - Detach text embedding model from LLM model.
 
 ## Bug fixes:
