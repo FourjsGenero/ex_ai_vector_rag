@@ -1,6 +1,9 @@
 LAYOUT (WINDOWSTYLE="main2",TEXT="Retrieval Augmented Generation (RAG)")
+
 HBOX (SPLITTER)
+
 VBOX
+
 GRID
 {
 SQL DB server/source:[dbs                    ][src                         ]
@@ -8,6 +11,7 @@ AI provider/model:   [pro            ][mod             ]Vector dim:[dim    ]
 [b1                    ][b2                     ][b3                       ]
 }
 END
+
 SCROLLGRID (WANTFIXEDPAGESIZE=NO,STYLE="style1")
 {
 ---------------------------------------------------------------------------
@@ -18,7 +22,10 @@ SCROLLGRID (WANTFIXEDPAGESIZE=NO,STYLE="style1")
 }
 END
 END
-VBOX
+
+FOLDER
+
+PAGE p1 (TEXT="System Prompt")
 GRID
 {
 System prompt for LLM:
@@ -28,6 +35,13 @@ System prompt for LLM:
 [                                                       ]
 [                                                       ]
 [                                                       ]
+}
+END
+END
+
+PAGE p2 (TEXT="2-step query")
+GRID
+{
 Search in local SQL database:
 [qry                                                    ]
 [                                                       ]
@@ -37,7 +51,7 @@ Search in local SQL database:
 [                                                       ]
 [                                                       ]
 Max cosine similarity:[csm   ][fma                      ]
-Assistant message for LLM:
+Context message for LLM:
 [amg                                                    ]
 [                                                       ]
 [                                                       ]
@@ -46,11 +60,25 @@ Assistant message for LLM:
 [                                                       ]
 [                                                       ]
 [                                                       ]
+}
+END
+END
+
+PAGE p3 (TEXT="User question")
+GRID
+{
 User prompt for LLM:
 [upr                                                    ]
 [                                                       ]
 [                                                       ]
 [qai                                                    ]
+}
+END
+END
+
+PAGE p4 (TEXT="Response")
+GRID
+{
 Response:
 [res                                                    ]
 [                                                       ]
@@ -64,6 +92,7 @@ Response:
 }
 END
 END
+
 END
 END
 
@@ -111,16 +140,16 @@ TEXTEDIT qry = FORMONLY.search_context, STRETCH=BOTH,
   PLACEHOLDER="Enter a search context for items here";
 EDIT csm = FORMONLY.max_cosine_similarity, NOT NULL,
   COMMENT="Max cosine distance must be adapted to the chosen embedding model";
-BUTTON csv: search_vector, TEXT="4. Compute context vector", IMAGE="fa-cogs",
+BUTTON csv: search_vector, TEXT="Compute context vector", IMAGE="fa-cogs",
   COMMENT="Generate the vector from the search context";
-BUTTON fma: find_match, TEXT="5. Find matching rows in local DB", IMAGE="fa-database",
+BUTTON fma: find_match, TEXT="Find matching rows in local DB", IMAGE="fa-database",
   COMMENT="Find similar matching items description in local SQL database";
 TEXTEDIT qrv = FORMONLY.search_vector, COLOR=RED, STRETCH=BOTH;
 TEXTEDIT amg = FORMONLY.context_data, STRETCH=BOTH;
 
 TEXTEDIT upr = FORMONLY.user_question, STRETCH=BOTH,
   PLACEHOLDER="Enter a user prompt for the LLM here";
-BUTTON qai: ask_llm, TEXT="6. Send user question to LLM", IMAGE="fa-send",
+BUTTON qai: ask_llm, TEXT="Send user question to LLM", IMAGE="fa-send",
   COMMENT="Send request to LLM";
 TEXTEDIT res = FORMONLY.llm_response, STRETCH=BOTH;
 
