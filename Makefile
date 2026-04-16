@@ -1,8 +1,8 @@
 FORMS=\
- ai_rag_quotes.42f
+ ai_rag_items.42f
 
 PROGMOD=\
- ai_rag_quotes.42m
+ ai_rag_items.42m
 
 all: $(PROGMOD) $(FORMS)
 
@@ -13,7 +13,7 @@ all: $(PROGMOD) $(FORMS)
 	fglcomp -Wall -Wno-stdsql -M $<
 
 run:: all
-	fglrun ai_rag_quotes.42m
+	fglrun ai_rag_items.42m
 
 clean::
 	rm -f *.42?

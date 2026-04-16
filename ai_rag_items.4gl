@@ -58,7 +58,7 @@ MAIN
     DEFINE llm_response STRING
     DEFINE vector_dimension INTEGER
 
-    OPEN FORM f1 FROM "ai_rag_quotes"
+    OPEN FORM f1 FROM "ai_rag_items"
     DISPLAY FORM f1
 
     LET ai_provider = NVL(arg_val(1),"anthropic")
@@ -145,14 +145,14 @@ MAIN
                CALL _mbox_ok("First you need to compute the search vector from context sentence.")
                CONTINUE DIALOG
            END IF
-           LET x = find_matching_quotes(max_cosine_similarity,search_vector,context_items)
+           LET x = find_matching_items(max_cosine_similarity,search_vector,context_items)
            IF x == 0 THEN
                LET context_data = NULL
-               CALL _mbox_ok("No matching quotes found in database!\nIncrease MAX cosine similarity.")
+               CALL _mbox_ok("No matching items found in database!\nIncrease MAX cosine similarity.")
            ELSE
                LET context_data = build_context_data(search_context,context_items)
-               CALL fill_quote_list_attrs(item_list,context_items,item_list_attr)
-               CALL _mbox_ok(SFMT("Found %1 matching quotes in database!",x))
+               CALL fill_item_list_attrs(item_list,context_items,item_list_attr)
+               CALL _mbox_ok(SFMT("Found %1 matching items in database!",x))
            END IF
 
         ON ACTION ask_llm
@@ -257,13 +257,13 @@ FUNCTION fill_item_list(
                   || SFMT(", %1", _vector_sql_fetch_expr("emb",c_vector_dimension))
                   || " FROM smitems ORDER BY pkey"
 --display "SQL:", sqlcmd
-    DECLARE c_fill_quote_list CURSOR FROM sqlcmd
+    DECLARE c_fill_list CURSOR FROM sqlcmd
     CALL arr.clear()
-    OPEN c_fill_quote_list
+    OPEN c_fill_list
     LET x = 1
     WHILE sqlca.sqlcode == 0
         LOCATE arr[x].emb IN FILE
-        FETCH c_fill_quote_list INTO arr[x].*
+        FETCH c_fill_list INTO arr[x].*
         IF sqlca.sqlcode == NOTFOUND THEN
             EXIT WHILE
         END IF
@@ -275,7 +275,7 @@ FUNCTION fill_item_list(
 
 END FUNCTION
 
-FUNCTION fill_quote_list_attrs(
+FUNCTION fill_item_list_attrs(
     item_list DYNAMIC ARRAY OF t_item,
     context_items DYNAMIC ARRAY OF t_context_item,
     item_list_attr DYNAMIC ARRAY OF t_item_attr
@@ -399,7 +399,7 @@ FUNCTION compute_search_vector(
 
 END FUNCTION
 
-FUNCTION find_matching_quotes(
+FUNCTION find_matching_items(
     max_cosine_similarity FLOAT,
     search_vector STRING,
     context_items DYNAMIC ARRAY OF t_context_item
