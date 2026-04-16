@@ -111,10 +111,6 @@ $ fglrun ai_rag_quotes.42m "anthropic" "clause-opus-4-6" "items_1.json" "mydbsrc
 ```
 
 ## TODO:
-- Use structured system prompt with:
-  -- `<role>...</role>`
-  -- `<task>...</task>`
-  -- `<instructions>...</instructions>`
 - Add second procedure, to get answer directly from user question without intermediate
 vector generation. Ask LLM to:
   1) Extract concepts from user question (there can be several concepts!)
