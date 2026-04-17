@@ -114,18 +114,34 @@ $ fglrun ai_rag_quotes.42m "anthropic" "clause-opus-4-6" "items_1.json" "mydbsrc
 
 ### Using the demo program
 
+#### Initialization
+
 1) Select the AI provider and text completion model
 2) Define the vector dimension (default is OK)
 3) Initialize the test table with the `[1. Init SQL table]` button
 4) Fill the items list with the `[2. Load item list]` button
 5) Compute vectors for each row with `[3. Compute embeddings]` button
-6) Open the `2-step query` folder page
-7) In the first field, enter item search criteria like "Sports items"
-8) Compute the search vector with the `[Compute context vector]` button
-9) Run the SQL query with the `[Find matching rows]` button
-10) If too few or tto many items are found, adjust the MAX cosine similarity ratio
-11) Enter the user question in the last field
-12) Ask the LLM with the `[Send request to LLM]` button
+
+#### Detailed RAG procedure
+
+1) Open the `2-step query` folder page
+2) In the first field, enter item search criteria like "Sports items"
+3) Compute the search vector with the `[Compute context vector]` button
+4) Run the SQL query with the `[Find matching rows]` button
+5) If too few or tto many items are found, adjust the MAX cosine similarity ratio
+6) Enter the user question in the last field
+7) Ask the LLM with the `[Send request to LLM]` button
+
+#### End-user mode
+
+1) Open the `Direct query` folder page
+2) Enter the user question in the first field
+3) Ask the LLM with the `[Send request to LLM]` button
+
+In this case, the relevant items are searched in the database by using the user
+query as search criteria to compare with stored vectors describing items.
+
+THIS SHOULD BE REFINED BY EXTRACTING CONCEPTS FOUND IN THE USER QUESTION
 
 ## TODO:
 
